@@ -1020,27 +1020,36 @@ async function deleteModelFromFirebase(id) {
 }
 
 async function loadModelsFromFirebase() {
-  if (!window._fb) return;
-  const { db } = window._fb;
-  const snap = await db.collection("models").get();
-  models = [];
-  snap.forEach(d => {
-    const data = d.data();
-    data.id = d.id;
-    // Init new fields if missing
-    if (!data.likes) data.likes = 0;
-    if (!data.views) data.views = 0;
-    if (!data.settings) data.settings = { notifMessages: true };
-    if (!data.role) data.role = "visitor";
-    if (data.verified === undefined) data.verified = false;
-    // Filtrer les URLs corrompues (blob://) qui auraient pu être sauvegardées
-    if (data.photos) data.photos = data.photos.filter(p => p && p.url && p.url.startsWith("http"));
-    if (data.videos) data.videos = data.videos.filter(v => v && v.url && v.url.startsWith("http"));
-    if (data.avatar && !data.avatar.startsWith("http")) data.avatar = null;
-    models.push(data);
-  });
-  // Sort by id
-  models.sort((a,b) => a.id - b.id);
+  if (!window._fb) {
+    console.error("Firebase non initialisé");
+    return;
+  }
+  try {
+    const { db } = window._fb;
+    const snap = await db.collection("models").get();
+    models = [];
+    snap.forEach(d => {
+      const data = d.data();
+      data.id = d.id;
+      // Init new fields if missing
+      if (!data.likes) data.likes = 0;
+      if (!data.views) data.views = 0;
+      if (!data.settings) data.settings = { notifMessages: true };
+      if (!data.role) data.role = "visitor";
+      if (data.verified === undefined) data.verified = false;
+      // Filtrer les URLs corrompues (blob://) qui auraient pu être sauvegardées
+      if (data.photos) data.photos = data.photos.filter(p => p && p.url && p.url.startsWith("http"));
+      if (data.videos) data.videos = data.videos.filter(v => v && v.url && v.url.startsWith("http"));
+      if (data.avatar && !data.avatar.startsWith("http")) data.avatar = null;
+      models.push(data);
+    });
+    // Sort by id
+    models.sort((a,b) => a.id - b.id);
+    console.log(`Chargé ${models.length} modèles depuis Firebase`);
+  } catch (e) {
+    console.error("Erreur chargement modèles:", e);
+    models = [];
+  }
 }
 
 async function loadCommentsFromFirebase() {
@@ -2705,7 +2714,11 @@ function renderRegister() {
 
 async function renderHomeAsync() {
   showLoader("Chargement…");
-  try { await loadModelsFromFirebase(); } catch(e) {}
+  try {
+    await loadModelsFromFirebase();
+  } catch(e) {
+    console.error("Erreur dans renderHomeAsync:", e);
+  }
   document.getElementById("root").innerHTML = renderHome();
 }
 
@@ -2724,7 +2737,16 @@ function renderHome() {
   if (currentSortMode === "likes") sorted.sort((a,b) => (b.likes||0) - (a.likes||0));
   else if (currentSortMode === "views") sorted.sort((a,b) => (b.views||0) - (a.views||0));
 
-  const cards = sorted.map((m, idx) => {
+  // Fallback message if no models
+  let cardsHtml;
+  if (sorted.length === 0) {
+    cardsHtml = `<div style="text-align:center;padding:4rem;color:#8a7a6a">
+      <div style="font-size:3rem;margin-bottom:1rem">∅</div>
+      <p style="font-size:0.9rem;letter-spacing:0.1em">Aucun modèle disponible pour le moment</p>
+      ${!session ? `<p style="font-size:0.75rem;color:#7a6a58;margin-top:1rem"><span style="color:#c8a060;cursor:pointer;text-decoration:underline" onclick="goPage('register')">Créer un compte</span> pour devenir modèle</p>` : ""}
+    </div>`;
+  } else {
+    const cards = sorted.map((m, idx) => {
     const isMine = session?.role === "model" && m.email === session.email;
     const cover = m.photos && m.photos[0] ? m.photos[0].url : null;
     const isLiked = likedProfiles.includes(String(m.id));
@@ -2755,6 +2777,8 @@ function renderHome() {
       ${!isMine && !session ? `<div class="mc-actions"><button class="mc-msg-btn" onclick="event.stopPropagation();promptLoginForChat(${m.id})">✦ Écrire</button></div>` : ""}
     </div>`;
   }).join("");
+    cardsHtml = cards;
+  }
 
   return `
     <div class="hero">
@@ -2794,7 +2818,7 @@ function renderHome() {
         <div style="flex:1"></div>
         <input type="text" class="input" id="search-input" placeholder="Rechercher un modèle..." style="width:250px;padding:0.5rem 0.8rem;font-size:0.75rem" value="${escHtml(searchQuery)}" oninput="handleSearch(this.value)" />
       </div>
-      <div class="grid-models">${cards}</div>
+      <div class="grid-models">${cardsHtml}</div>
     </div>
     <div class="footer">ONYX <span>STUDIO</span> — Tous droits réservés — Accès strictement réservé aux majeurs</div>
   `;
