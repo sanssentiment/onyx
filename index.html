@@ -857,6 +857,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 </div>
 
 <script>
+// ── ROUTER (defined early for HTML onclick handlers) ──
+let currentPage = "home";
+function goPage(page) {
+  currentPage = page;
+  if (typeof render === 'function') render();
+  if (typeof updateNav === 'function') updateNav();
+}
+
 // ── SECURITY ──
 const _loginAttempts = {};
 const _actionRateLimits = {}; // For other sensitive actions
@@ -1198,7 +1206,6 @@ if (window._fbReady) {
 }
 
 let session = null;
-let currentPage = "home";
 let currentProfileId = null;
 let editDraft = null;
 let editDraftPhotos = []; // {url, name, blob}
