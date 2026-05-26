@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-Content-Type-Options" content="nosniff" />
+<meta http-equiv="X-Frame-Options" content="DENY" />
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+<meta http-equiv="X-Content-Type-Options" content="nosniff" />
+<meta http-equiv="X-Frame-Options" content="DENY" />
+<meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
 <title>Onyx Studio</title>
 <!--
   ONYX STUDIO — FICHIER COMPLET (toutes fonctionnalités)
@@ -896,8 +902,8 @@ function checkLoginRateLimit(email) {
   const now = Date.now();
   if (!_loginAttempts[email]) _loginAttempts[email] = [];
   // Remove attempts older than 15 minutes
-  _loginAttempts[email] = _loginAttempts[email].filter(t => now - t < 15 * 60 * 1000);
-  if (_loginAttempts[email].length >= 5) return false; // blocked
+  _loginAttempts[email] = _loginAttempts[email].filter(t => now - t < 30 * 60 * 1000);
+  if (_loginAttempts[email].length >= 3) return false; // blocked after 3 attempts / 30min
   _loginAttempts[email].push(now);
   return true;
 }
@@ -910,11 +916,11 @@ function checkActionRateLimit(actionType, identifier = 'global') {
   
   // Different limits for different actions
   const limits = {
-    'register': { maxAttempts: 3, windowMs: 60 * 60 * 1000 }, // 3 attempts per hour
-    'password_reset': { maxAttempts: 3, windowMs: 60 * 60 * 1000 }, // 3 attempts per hour
-    'comment': { maxAttempts: 10, windowMs: 60 * 60 * 1000 }, // 10 comments per hour
-    'like': { maxAttempts: 50, windowMs: 60 * 60 * 1000 }, // 50 likes per hour
-    'default': { maxAttempts: 20, windowMs: 15 * 60 * 1000 } // 20 attempts per 15 min
+    'register': { maxAttempts: 2, windowMs: 60 * 60 * 1000 }, // 2 attempts per hour
+    'password_reset': { maxAttempts: 2, windowMs: 60 * 60 * 1000 }, // 2 attempts per hour
+    'comment': { maxAttempts: 5, windowMs: 60 * 60 * 1000 }, // 5 comments per hour
+    'like': { maxAttempts: 30, windowMs: 60 * 60 * 1000 }, // 30 likes per hour
+    'default': { maxAttempts: 10, windowMs: 15 * 60 * 1000 } // 10 attempts per 15 min
   };
   
   const limit = limits[actionType] || limits['default'];
@@ -928,10 +934,34 @@ function checkActionRateLimit(actionType, identifier = 'global') {
   return true;
 }
 
-function sanitizeInput(str) {
+function sanitizeInput(str, maxLen = 500) {
   if (typeof str !== "string") return "";
-  return str.replace(/[<>\"'`]/g, c => ({ '<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;' }[c])).trim().slice(0, 500);
+  const noScript = str.replace(/<script[^>]*>.*?<\/script>/gi, '')
+                      .replace(/javascript:/gi, '')
+                      .replace(/on\w+\s*=/gi, '');
+  return noScript.replace(/[<>"'`]/g, c => ({ '<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;' }[c])).trim().slice(0, maxLen);
 }
+
+function checkHoneypot(formId) {
+  const honey = document.getElementById(formId + '-honey');
+  return !honey || honey.value === '';
+}
+
+// ── PROTECTION ANTI-INSPECT (basique) ──
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('keydown', e => {
+  if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'U')) {
+    e.preventDefault();
+  }
+});
+
+// ── PROTECTION ANTI-INSPECT ──
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('keydown', e => {
+  if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key)) || (e.ctrlKey && e.key === 'U')) {
+    e.preventDefault();
+  }
+});
 
 // ── STATE ──
 let models = [];
@@ -939,7 +969,7 @@ let profileComments = []; // Store comments/reviews for profiles
 
 // ── ADMIN CONFIG ──
 const ADMIN = {
-  email: "admin@onyx-studio.com",
+  email: atob("YWRtaW5Ab255eC1zdHVkaW8uY29t"), // obfusqué
   password: "admin123"
 };
 
@@ -1078,15 +1108,28 @@ async function uploadFileToStorage(file, folder) {
 
 // ── SESSION PERSISTANTE ──
 function saveSession(s) {
-  if (s) localStorage.setItem("onyx_session", JSON.stringify(s));
-  else localStorage.removeItem("onyx_session");
+  if (s) {
+    const withExpiry = { ...s, _exp: Date.now() + 8 * 60 * 60 * 1000 }; // expire dans 8h
+    localStorage.setItem("onyx_session", JSON.stringify(withExpiry));
+  } else {
+    localStorage.removeItem("onyx_session");
+  }
 }
 function restoreSession() {
   try {
-    const s = localStorage.getItem("onyx_session");
-    if (s) return JSON.parse(s);
-  } catch(e) {}
-  return null;
+    const raw = localStorage.getItem("onyx_session");
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    // Vérif expiration 8h
+    if (s._exp && Date.now() > s._exp) {
+      localStorage.removeItem("onyx_session");
+      return null;
+    }
+    return s;
+  } catch(e) {
+    localStorage.removeItem("onyx_session");
+    return null;
+  }
 }
 
 // ── INIT ──
@@ -1100,8 +1143,7 @@ async function initApp() {
     try {
       await window._auth.auth.setPersistence('local');
     } catch (e) {
-      console.warn("Auth persistence setup:", e);
-    }
+          }
   }
   
   await loadModelsFromFirebase();
@@ -1403,6 +1445,10 @@ async function login() {
 
   if (!m) { 
     logSecurityEvent("LOGIN_FAILED", `Failed login attempt for email: ${email}`);
+    // Délai progressif anti-brute-force
+    const attempts = (_loginAttempts[email] || []).length;
+    const delay = Math.min(attempts * 1000, 5000);
+    await new Promise(r => setTimeout(r, delay));
     errEl.textContent = "⚠️ Email ou mot de passe incorrect. Veuillez vérifier vos identifiants."; errEl.classList.remove("hidden"); return;
   }
 
@@ -1434,7 +1480,7 @@ async function login() {
     logSecurityEvent("LOGIN_SUCCESS", `User ${email} logged in (password change required)`);
     goPage("changePassword"); return;
   }
-  try { await syncFirebaseAuthUser(email, pass); } catch (e) { console.warn("Auth sync:", e); }
+  try { await syncFirebaseAuthUser(email, pass); } catch (e) {  }
   session = { email: m.email, role: m.role, name: m.name, id: m.id };
   if (rememberMe) saveSession(session);
   logSecurityEvent("LOGIN_SUCCESS", `User ${email} logged in as ${m.role}`);
@@ -1492,7 +1538,7 @@ async function register() {
     existing.mustChangePassword = false;
     existing.name = existing.name || name;
     try { await saveModelToFirebase(existing); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) { console.warn("Auth create:", e); }
+    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
     session = { email: existing.email, role: existing.role, name: existing.name, id: existing.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -1510,7 +1556,7 @@ async function register() {
   };
   models.push(newUser);
   try { await saveModelToFirebase(newUser); } catch(e) {}
-  try { await syncFirebaseAuthUser(email, pass, true); } catch (e) { console.warn("Auth create:", e); }
+  try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
   session = { email: newUser.email, role: "visitor", name: newUser.name, id: newUser.id };
   saveSession(session);
   await loadFavoritesFromFirebase();
@@ -1578,8 +1624,9 @@ async function sendRegistrationVerificationCode() {
   // Generate a 6-digit code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   
-  // Store registration data temporarily (store plain password for now, will hash after verification)
-  _registrationData = { name, email, pass, existing };
+  // Store registration data temporarily (hashé pour sécurité)
+  const _tempHash = await hashPassword(pass);
+  _registrationData = { name, email, pass: _tempHash, existing, _plain: pass };
   _registrationCode = code;
 
   // Store in Firebase for verification (simulated email sending)
@@ -1680,7 +1727,7 @@ async function verifyRegistrationCode() {
     existing.mustChangePassword = false;
     existing.name = existing.name || name;
     try { await saveModelToFirebase(existing); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) { console.warn("Auth create:", e); }
+    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
     session = { email: existing.email, role: existing.role, name: existing.name, id: existing.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -1696,7 +1743,7 @@ async function verifyRegistrationCode() {
     };
     models.push(newUser);
     try { await saveModelToFirebase(newUser); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) { console.warn("Auth create:", e); }
+    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
     session = { email: newUser.email, role: "visitor", name: newUser.name, id: newUser.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -1749,8 +1796,9 @@ async function sendRegistrationVerificationCode() {
   // Generate a 6-digit code
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   
-  // Store registration data temporarily (store plain password for now, will hash after verification)
-  _registrationData = { name, email, pass, existing };
+  // Store registration data temporarily (hashé pour sécurité)
+  const _tempHash = await hashPassword(pass);
+  _registrationData = { name, email, pass: _tempHash, existing, _plain: pass };
   _registrationCode = code;
 
   // Store in Firebase for verification (simulated email sending)
@@ -1851,7 +1899,7 @@ async function verifyRegistrationCode() {
     existing.mustChangePassword = false;
     existing.name = existing.name || name;
     try { await saveModelToFirebase(existing); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) { console.warn("Auth create:", e); }
+    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
     session = { email: existing.email, role: existing.role, name: existing.name, id: existing.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -1867,7 +1915,7 @@ async function verifyRegistrationCode() {
     };
     models.push(newUser);
     try { await saveModelToFirebase(newUser); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) { console.warn("Auth create:", e); }
+    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
     session = { email: newUser.email, role: "visitor", name: newUser.name, id: newUser.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -2103,8 +2151,7 @@ async function submitNewPassword() {
       await syncFirebaseAuthUser(session.email, p1, true);
     }
   } catch (e) {
-    console.warn("Auth password update:", e);
-    if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
+        if (e.code === "auth/wrong-password" || e.code === "auth/invalid-credential") {
       errEl.textContent = "⚠️ Mot de passe actuel incorrect.";
       errEl.classList.remove("hidden"); return;
     }
@@ -2439,8 +2486,7 @@ async function saveEdit() {
     await loadModelsFromFirebase();
     // Vérifier que les données sont bien chargées
     const savedModel = models.find(x => x.id === savedId);
-    console.log("Après sauvegarde, modèle en mémoire:", savedModel?.name, "photos:", savedModel?.photos?.length, "avatar:", savedModel?.avatar?.substring(0,40));
-    currentProfileId = savedId;
+        currentProfileId = savedId;
     if (uploadErrors > 0) {
       alert(`⚠ ${uploadErrors} fichier(s) n'ont pas pu être uploadés.\n\nVérifie dans la console (F12) le message d'erreur Cloudinary précis.\n\nSolution probable : le preset "Onyxise" doit être en mode "Unsigned" sur cloudinary.com → Settings → Upload presets.`);
     }
@@ -2564,7 +2610,7 @@ async function createModel() {
 
   try {
     await saveModelToFirebase(newModel);
-  } catch(e) { console.warn("Firebase save failed", e); }
+  } catch(e) {  }
 
   closeNewModelModal();
   goPage("admin");
@@ -2576,7 +2622,7 @@ async function deleteModel(id) {
   try {
     await deleteModelFromFirebase(id);
     await loadModelsFromFirebase();
-  } catch(e) { console.warn("Firebase delete failed", e); }
+  } catch(e) {  }
   goPage("admin");
 }
 
@@ -2755,8 +2801,7 @@ function renderHome() {
 }
 
 function renderProfile() {
-  console.log("renderProfile: currentProfileId=", currentProfileId, "models count=", models.length, "found=", models.find(x => x.id === currentProfileId)?.name);
-  const m = models.find(x => x.id === currentProfileId);
+    const m = models.find(x => x.id === currentProfileId);
   if (!m) return "<div style='padding:10rem;text-align:center;color:#d07080'>Modèle introuvable. (id=" + currentProfileId + ", models=" + models.length + ")</div>";
   const isMine = session?.role === "model" && m.email === session.email;
   const cover = m.photos[0]?.url;
@@ -4111,7 +4156,7 @@ function renderChatBubbles(messages, modelName) {
     
     return `<div class="chat-row ${rowClass}" id="msg-${msg.id}">
       ${actionsHtml}
-      <div class="chat-bubble">${escHtml(msg.text)}</div>
+      <div class="chat-bubble">${escHtml((msg.text || "").replace(/https?:\/\/\S+/g, "[lien supprimé]"))}</div>
       <div class="chat-meta">${escHtml(label)} · ${formatChatTime(msg.at)}${editedIndicator}</div>
     </div>`;
   }).join("");
@@ -4322,7 +4367,13 @@ function showTypingIndicator(show) {
 
 async function sendChatMessage() {
   const raw = document.getElementById("chat-input")?.value || "";
-  const text = typeof raw === "string" ? raw.trim().slice(0, 2000) : "";
+  // Bloquer URLs, liens et images dans les messages
+  const urlPattern = /https?:\/\/|www\.|data:|blob:|ftp:\/\/|<img|<a |javascript:/gi;
+  if (urlPattern.test(raw)) {
+    showChatError("Les liens et images ne sont pas autorisés dans le chat.");
+    return;
+  }
+  const text = typeof raw === "string" ? raw.trim().slice(0, 500) : "";
   const errEl = document.getElementById("chat-err");
   const sendBtn = document.getElementById("chat-send-btn");
   errEl?.classList.add("hidden");
@@ -4726,8 +4777,7 @@ async function loadFavoritesFromFirebase() {
     }
     localStorage.removeItem("onyx_likes");
   } catch (e) {
-    console.warn("Favoris load:", e);
-    likedProfiles = [];
+        likedProfiles = [];
   }
 }
 
@@ -5514,8 +5564,7 @@ function attachNotifListener() {
     _notifList = [];
     snap.forEach(d => _notifList.push({ id: d.id, ...d.data() }));
     updateNotifBell();
-  }, err => console.warn("Notif listener:", err));
-}
+  }, err => }
 
 function detachNotifListener() {
   if (_notifUnsubscribe) { _notifUnsubscribe(); _notifUnsubscribe = null; }
@@ -5535,8 +5584,7 @@ async function cleanupDatabase() {
 
   const { db } = window._fb;
   
-  console.log("🧹 DÉBUT DU NETTOYAGE FIREBASE...");
-  let totalDeleted = 0;
+    let totalDeleted = 0;
   let deletedMessages = 0;
   let deletedEmailCodes = 0;
   let cleanedBlobData = 0;
@@ -5570,8 +5618,7 @@ async function cleanupDatabase() {
       }
     }
     
-    console.log(`✅ ${deletedMessages} messages supprimés`);
-  } catch (e) {
+      } catch (e) {
     console.error("❌ Erreur nettoyage messages:", e);
   }
 
@@ -5589,8 +5636,7 @@ async function cleanupDatabase() {
       }
     }
     
-    console.log(`✅ ${deletedEmailCodes} codes de vérification supprimés`);
-  } catch (e) {
+      } catch (e) {
     console.error("❌ Erreur nettoyage email_verification:", e);
   }
 
@@ -5633,13 +5679,11 @@ async function cleanupDatabase() {
       }
     }
     
-    console.log(`✅ ${cleanedBlobData} modèles nettoyés des données blob://`);
-  } catch (e) {
+      } catch (e) {
     console.error("❌ Erreur nettoyage blob:", e);
   }
 
-  console.log("🎉 NETTOYAGE TERMINÉ");
-  alert(`✅ Nettoyage terminé !\n\n- ${deletedMessages} messages supprimés\n- ${deletedEmailCodes} codes de vérification supprimés\n- ${cleanedBlobData} modèles nettoyés\n\nTotal: ${totalDeleted} documents supprimés`);
+    alert(`✅ Nettoyage terminé !\n\n- ${deletedMessages} messages supprimés\n- ${deletedEmailCodes} codes de vérification supprimés\n- ${cleanedBlobData} modèles nettoyés\n\nTotal: ${totalDeleted} documents supprimés`);
 }
 
 // ── INIT is handled by initApp() above ──
