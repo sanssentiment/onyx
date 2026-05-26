@@ -1072,7 +1072,7 @@ async function loadCommentsFromFirebase() {
       profileComments.push(data);
     });
   } catch (e) {
-    console.error("Error loading comments:", e);
+    // Silently ignore permission errors - comments feature optional
     profileComments = [];
   }
 }
@@ -3044,7 +3044,9 @@ async function loadBlacklist() {
     // Nettoyer les entrées expirées
     const now = Date.now();
     emailBlacklist = emailBlacklist.filter(e => !e.expiresAt || e.expiresAt > now);
-  } catch(e) { console.error("Blacklist load:", e); }
+  } catch(e) {
+    // Silently ignore permission errors - blacklist feature optional
+  }
 }
 
 function getBlacklistEntry(email) {
@@ -3428,7 +3430,9 @@ async function loadIPBlacklist() {
     // Nettoyer les entrées expirées
     const now = Date.now();
     ipBlacklist = ipBlacklist.filter(e => !e.expiresAt || e.expiresAt > now);
-  } catch(e) { console.error("IP Blacklist load:", e); }
+  } catch(e) {
+    // Silently ignore permission errors - IP blacklist feature optional
+  }
 }
 
 // Ajouter une IP à la blacklist
