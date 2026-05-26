@@ -2746,38 +2746,37 @@ function renderHome() {
       ${!session ? `<p style="font-size:0.75rem;color:#7a6a58;margin-top:1rem"><span style="color:#c8a060;cursor:pointer;text-decoration:underline" onclick="goPage('register')">Créer un compte</span> pour devenir modèle</p>` : ""}
     </div>`;
   } else {
-    const cards = sorted.map((m, idx) => {
-    const isMine = session?.role === "model" && m.email === session.email;
-    const cover = m.photos && m.photos[0] ? m.photos[0].url : null;
-    const isLiked = likedProfiles.includes(String(m.id));
-    return `<div class="model-card" onclick="openProfile(${m.id})">
-      ${isMine ? `<div class="mc-mine-badge">✦ Ma case — Cliquez pour voir</div>` : ""}
-      ${m.verified ? `<div class="mc-verified"><span class="verified-badge">✓ Vérifié</span></div>` : ""}
-      <div class="mc-img-wrap">
-        ${m.avatar ? `<img class="mc-img" src="${escHtml(m.avatar)}" alt="${escHtml(m.name)}" style="object-position:top" />` : cover ? `<img class="mc-img" src="${escHtml(cover)}" alt="${escHtml(m.name)}" />` : `<div class="mc-placeholder">${m.initial}</div>`}
-        <div class="mc-gradient"></div>
-      </div>
-      <div class="mc-footer">
-        <div class="mc-body-left">
-          <div class="mc-number">0${idx + 1}</div>
-          <div class="mc-name">${escHtml(m.name)}</div>
-          ${m.bio ? `<div class="mc-bio">${escHtml(m.bio)}</div>` : ""}
-          <div class="mc-stats-row">
-            <span class="mc-stat"><i>♥</i> ${m.likes||0}</span>
-            <span class="mc-stat">👁 ${m.views||0}</span>
-          </div>
+    cardsHtml = sorted.map((m, idx) => {
+      const isMine = session?.role === "model" && m.email === session.email;
+      const cover = m.photos && m.photos[0] ? m.photos[0].url : null;
+      const isLiked = likedProfiles.includes(String(m.id));
+      return `<div class="model-card" onclick="openProfile(${m.id})">
+        ${isMine ? `<div class="mc-mine-badge">✦ Ma case — Cliquez pour voir</div>` : ""}
+        ${m.verified ? `<div class="mc-verified"><span class="verified-badge">✓ Vérifié</span></div>` : ""}
+        <div class="mc-img-wrap">
+          ${m.avatar ? `<img class="mc-img" src="${escHtml(m.avatar)}" alt="${escHtml(m.name)}" style="object-position:top" />` : cover ? `<img class="mc-img" src="${escHtml(cover)}" alt="${escHtml(m.name)}" />` : `<div class="mc-placeholder">${m.initial}</div>`}
+          <div class="mc-gradient"></div>
         </div>
-        ${session && !isMine ? `<button class="like-btn ${isLiked ? "liked" : ""}" onclick="event.stopPropagation();toggleLike(${m.id}, event)" title="${isLiked ? "Retirer le like" : "J aime"}">
-          <span class="heart">${isLiked ? "♥" : "♡"}</span>
-          ${m.likes||0}
-        </button>` : (!isMine ? `<button class="like-btn" onclick="event.stopPropagation();promptLoginForLike()" title="Connexion requise"><span class="heart">♡</span> ${m.likes||0}</button>` : "")}
-      </div>
-      ${isMine ? `<div class="mc-actions"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openEdit(${m.id})">✎ Modifier</button></div>` : ""}
-      ${!isMine && session?.role === "visitor" ? `<div class="mc-actions"><button class="mc-msg-btn" onclick="event.stopPropagation();startConversation(${m.id})">✦ Écrire</button></div>` : ""}
-      ${!isMine && !session ? `<div class="mc-actions"><button class="mc-msg-btn" onclick="event.stopPropagation();promptLoginForChat(${m.id})">✦ Écrire</button></div>` : ""}
-    </div>`;
-  }).join("");
-    cardsHtml = cards;
+        <div class="mc-footer">
+          <div class="mc-body-left">
+            <div class="mc-number">0${idx + 1}</div>
+            <div class="mc-name">${escHtml(m.name)}</div>
+            ${m.bio ? `<div class="mc-bio">${escHtml(m.bio)}</div>` : ""}
+            <div class="mc-stats-row">
+              <span class="mc-stat"><i>♥</i> ${m.likes||0}</span>
+              <span class="mc-stat">👁 ${m.views||0}</span>
+            </div>
+          </div>
+          ${session && !isMine ? `<button class="like-btn ${isLiked ? "liked" : ""}" onclick="event.stopPropagation();toggleLike(${m.id}, event)" title="${isLiked ? "Retirer le like" : "J aime"}">
+            <span class="heart">${isLiked ? "♥" : "♡"}</span>
+            ${m.likes||0}
+          </button>` : (!isMine ? `<button class="like-btn" onclick="event.stopPropagation();promptLoginForLike()" title="Connexion requise"><span class="heart">♡</span> ${m.likes||0}</button>` : "")}
+        </div>
+        ${isMine ? `<div class="mc-actions"><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openEdit(${m.id})">✎ Modifier</button></div>` : ""}
+        ${!isMine && session?.role === "visitor" ? `<div class="mc-actions"><button class="mc-msg-btn" onclick="event.stopPropagation();startConversation(${m.id})">✦ Écrire</button></div>` : ""}
+        ${!isMine && !session ? `<div class="mc-actions"><button class="mc-msg-btn" onclick="event.stopPropagation();promptLoginForChat(${m.id})">✦ Écrire</button></div>` : ""}
+      </div>`;
+    }).join("");
   }
 
   return `
@@ -5588,7 +5587,8 @@ function attachNotifListener() {
     _notifList = [];
     snap.forEach(d => _notifList.push({ id: d.id, ...d.data() }));
     updateNotifBell();
-  }, err => }
+  }, err => { console.error(err); });
+}
 
 function detachNotifListener() {
   if (_notifUnsubscribe) { _notifUnsubscribe(); _notifUnsubscribe = null; }
