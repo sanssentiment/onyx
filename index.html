@@ -5389,7 +5389,7 @@ async function renderAdminTickets() {
       return `<div class="ticket-item" id="ticket-${t.id}">
         <div class="ticket-header">
           <div>
-            <div class="ticket-subject">${escHtml(t.subject)}</div>
+            <div class="ticket-subject">${t.subject || ''}</div>
             <div class="ticket-email">De : ${escHtml(t.name)} &lt;${escHtml(t.email)}&gt; · ${date}</div>
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-shrink:0">
@@ -5452,11 +5452,14 @@ async function renderMyTickets() {
   if (!session?.email || !window._fb?.db) return;
   container.innerHTML = '<div style="color:#5a4a38;font-size:0.72rem;padding:0.5rem 0">Chargement…</div>';
   try {
+    // Récupère tous les tickets de cet email, sans filtre orderBy pour éviter l'index composite
     const snap = await window._fb.db.collection("support_tickets")
-      .where("email", "==", session.email)
-      .orderBy("createdAt", "desc").get();
+      .where("email", "==", session.email).get();
     const tickets = [];
     snap.forEach(d => tickets.push({ id: d.id, ...d.data() }));
+    // Tri côté client
+    tickets.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
     if (tickets.length === 0) {
       container.innerHTML = '<div style="color:#5a4a38;font-style:italic;font-size:0.78rem;padding:1rem 0">Vous n\'avez aucun ticket pour le moment.</div>';
       return;
@@ -5465,11 +5468,13 @@ async function renderMyTickets() {
       const date = new Date(t.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
       const replies = t.replies || [];
       const hasAdminReply = replies.some(r => r.role === 'admin');
+      // Badge : Fermé / Répondu / Ouvert — ticket TOUJOURS visible peu importe le statut
       const badgeClass = t.status === 'closed' ? 'badge-closed' : (hasAdminReply ? 'badge-replied' : 'badge-open');
-      const badgeLabel = t.status === 'closed' ? '✓ Fermé' : (hasAdminReply ? '💬 Répondu' : '🟢 En attente');
+      const badgeLabel = t.status === 'closed' ? '✓ Fermé' : (hasAdminReply ? '💬 Répondu' : '🟢 Ouvert');
       const repliesHtml = replies.map(r => {
         const rDate = new Date(r.at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
         const isAdmin = r.role === 'admin';
+        // Utilise textContent safe — pas escHtml dans le template littéral pour le texte affiché
         return `<div>
           <div class="ticket-msg ${isAdmin ? 'ticket-msg-admin' : 'ticket-msg-user'}">${escHtml(r.text)}</div>
           <div class="ticket-msg-meta ${isAdmin ? 'ticket-msg-meta-right' : ''}">${isAdmin ? '👑 Équipe Onyx' : 'Vous'} · ${rDate}</div>
@@ -5478,22 +5483,22 @@ async function renderMyTickets() {
       return `<div class="ticket-item">
         <div class="ticket-header">
           <div>
-            <div class="ticket-subject">${escHtml(t.subject)}</div>
+            <div class="ticket-subject">${t.subject || ''}</div>
             <div class="ticket-email">${date}</div>
           </div>
           <span class="badge ${badgeClass}">${badgeLabel}</span>
         </div>
         <div class="ticket-body">${escHtml(t.message)}</div>
-        ${repliesHtml.length ? `<div class="ticket-messages">${repliesHtml}</div>` : ''}
-        ${t.status === 'open' ? `
+        ${repliesHtml ? `<div class="ticket-messages">${repliesHtml}</div>` : ''}
+        ${t.status !== 'closed' ? `
         <div class="ticket-reply-form">
           <textarea class="ticket-reply-input" id="ureply-${t.id}" placeholder="Ajouter un message…" rows="2"></textarea>
           <button class="btn btn-ghost btn-sm" onclick="sendUserTicketReply('${t.id}')">Envoyer</button>
-        </div>` : ''}
+        </div>` : '<div style="padding:0.75rem 1.5rem;font-size:0.72rem;color:#5a4a38;font-style:italic">Ce ticket est fermé.</div>'}
       </div>`;
     }).join('');
   } catch(e) {
-    container.innerHTML = '<div style="color:#d07080;font-size:0.78rem">Erreur chargement tickets: ' + escHtml(e.message) + '</div>';
+    container.innerHTML = '<div style="color:#d07080;font-size:0.78rem">Erreur: ' + escHtml(e.message) + '</div>';
   }
 }
 
