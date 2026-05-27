@@ -14,12 +14,15 @@
   • Ordre : visiteur écrit en premier → modèle répond
   • Like : connexion obligatoire — chaque modèle voit uniquement ses conversations
 
-  FIREBASE — Firestore → Règles (obligatoire pour le chat) :
+  FIREBASE — Firestore → Règles (obligatoire pour le chat + support) :
   match /chat_threads/{threadId} {
     allow read, write: if true;
     match /messages/{msgId} { allow read, write: if true; }
   }
   match /user_favorites/{userId}/liked/{modelId} {
+    allow read, write: if true;
+  }
+  match /support_tickets/{ticketId} {
     allow read, write: if true;
   }
   (+ garder vos règles existantes pour /models/{modelId})
@@ -5303,13 +5306,16 @@ async function submitContactTicket() {
   const message = (document.getElementById("contact-message")?.value || "").trim();
   const errEl = document.getElementById("contact-err");
   const okEl = document.getElementById("contact-ok");
+  const btn = document.querySelector("#contact-submit-btn");
   errEl?.classList.add("hidden");
   okEl?.classList.add("hidden");
 
   if (!name || name.length < 2) { errEl.textContent = "⚠️ Veuillez entrer votre nom (min. 2 caractères)."; errEl.classList.remove("hidden"); return; }
   if (!validateEmail(email)) { errEl.textContent = "⚠️ Veuillez entrer une adresse e-mail valide."; errEl.classList.remove("hidden"); return; }
-  if (!subject || subject.length < 3) { errEl.textContent = "⚠️ Veuillez entrer un sujet (min. 3 caractères)."; errEl.classList.remove("hidden"); return; }
+  if (!subject || subject.length < 3) { errEl.textContent = "⚠️ Veuillez sélectionner un sujet."; errEl.classList.remove("hidden"); return; }
   if (!message || message.length < 10) { errEl.textContent = "⚠️ Votre message doit contenir au moins 10 caractères."; errEl.classList.remove("hidden"); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = "Envoi en cours…"; }
 
   const ticket = {
     name: sanitizeInput(name),
@@ -5322,19 +5328,47 @@ async function submitContactTicket() {
     userRole: session?.role || "anonymous"
   };
 
-  if (!window._fb?.db) { errEl.textContent = "⚠️ Service indisponible, réessayez plus tard."; errEl.classList.remove("hidden"); return; }
+  let saved = false;
 
-  try {
-    await window._fb.db.collection("support_tickets").add(ticket);
-    await logActivityEvent("CONTACT", `Nouveau ticket de ${name} (${email}): ${subject}`, email);
+  // Tentative 1 : Firestore
+  if (window._fb?.db) {
+    try {
+      await window._fb.db.collection("support_tickets").add(ticket);
+      await logActivityEvent("CONTACT", `Nouveau ticket de ${name} (${email}): ${subject}`, email);
+      saved = true;
+    } catch(e) {
+      console.warn("Firestore support_tickets refusé, tentative EmailJS…", e.code, e.message);
+      // Si règles Firestore bloquent, on tente EmailJS
+    }
+  }
+
+  // Tentative 2 : EmailJS (fallback)
+  if (!saved) {
+    try {
+      await emailjs.send("service_6lf32ud", "template_bz66viq", {
+        from_name: name,
+        from_email: email,
+        subject: subject,
+        message: message,
+        user_role: ticket.userRole
+      });
+      saved = true;
+    } catch(e) {
+      console.error("EmailJS fallback failed:", e);
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = "Envoyer le message"; }
+
+  if (saved) {
     okEl.textContent = "✅ Votre message a bien été envoyé. L'équipe vous répondra dans les plus brefs délais.";
     okEl.classList.remove("hidden");
     document.getElementById("contact-name").value = "";
     document.getElementById("contact-email").value = "";
     document.getElementById("contact-subject").value = "";
     document.getElementById("contact-message").value = "";
-  } catch(e) {
-    errEl.textContent = "⚠️ Erreur lors de l'envoi. Veuillez réessayer.";
+  } else {
+    errEl.textContent = "⚠️ Erreur lors de l'envoi. Veuillez réessayer ou nous écrire directement.";
     errEl.classList.remove("hidden");
   }
 }
@@ -5395,62 +5429,116 @@ async function deleteTicket(ticketId) {
 
 // ── PAGE À PROPOS ──
 function renderAbout() {
-  return `<div class="about-section">
-    <div style="margin-bottom:4rem">
-      <div class="section-label">Notre histoire</div>
-      <div class="section-title">À propos d'<em>Onyx Studio</em></div>
-      <div class="section-divider"></div>
-      <p style="font-size:0.88rem;color:#7a6a58;line-height:2;margin-top:1.5rem;max-width:640px">
-        Onyx Studio est une plateforme élégante dédiée à la mise en valeur de talents créatifs. 
-        Nous créons un espace où chaque artiste peut présenter son univers avec authenticité, 
-        et où chaque visiteur peut découvrir des talents d'exception dans un cadre raffiné.
+  return `<div class="about-section" style="max-width:1000px">
+
+    <!-- Hero intro -->
+    <div style="margin-bottom:5rem;text-align:center;padding:4rem 2rem 0">
+      <div class="section-label" style="justify-content:center;display:flex">L'art du contenu premium</div>
+      <div class="section-title" style="font-size:clamp(2.4rem,5vw,4rem);margin-bottom:1.5rem">
+        Bienvenue sur <em>Onyx Studio</em>
+      </div>
+      <div class="section-divider" style="margin:0 auto 2rem"></div>
+      <p style="font-size:0.92rem;color:#8a7a68;line-height:2.1;max-width:660px;margin:0 auto;letter-spacing:0.04em">
+        Onyx Studio est la plateforme de référence dédiée à la présentation de <strong style="color:#c8a060;font-weight:400">modèles de contenu digital pour adultes</strong> — communément appelés modèles DCP. Nous offrons à chaque créateur·trice un espace élégant, sécurisé et exclusif pour mettre en lumière son univers, partager son contenu et entrer en contact avec une audience qualifiée.
       </p>
+      <div style="margin-top:2.5rem;width:1px;height:60px;background:linear-gradient(180deg,#a07840,transparent);margin:2.5rem auto 0"></div>
+    </div>
+
+    <!-- Citation -->
+    <div style="margin:0 0 5rem;padding:2.5rem 3rem;border-left:1px solid rgba(160,120,64,0.35);border-right:1px solid rgba(160,120,64,0.35);position:relative;text-align:center">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:clamp(1.3rem,2.5vw,2rem);font-weight:300;font-style:italic;color:#e0d0b8;line-height:1.7;letter-spacing:0.03em">
+        « Chaque créateur mérite un écrin à la hauteur de son talent. »
+      </div>
+      <div style="margin-top:1.2rem;font-size:0.62rem;letter-spacing:0.35em;text-transform:uppercase;color:#a07840">— Onyx Studio</div>
+    </div>
+
+    <!-- Pourquoi Onyx Studio -->
+    <div style="margin-bottom:4rem">
+      <div class="section-label">Notre mission</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:300;color:#e8e0d0;margin-bottom:0.5rem">
+        Pourquoi <em>Onyx Studio</em> ?
+      </div>
+      <div class="section-divider" style="margin-bottom:2rem"></div>
+      <p style="font-size:0.86rem;color:#7a6a58;line-height:2;max-width:700px">
+        Le marché du contenu digital adulte est vaste, mais rarement traité avec l'élégance et le professionnalisme qu'il mérite. Onyx Studio a été conçu pour combler ce vide : une plateforme où l'esthétique, la sécurité et le respect des créateurs sont au cœur de chaque décision.
+      </p>
+    </div>
+
+    <!-- Features grid -->
+    <div class="about-feature">
+      <div class="about-feature-icon">◈</div>
+      <div class="about-feature-body">
+        <div class="about-feature-title">Profils DCP soigneusement curatés</div>
+        <div class="about-feature-text">Chaque modèle bénéficie d'un profil dédié — photos, vidéos, biographie, statistiques — présenté dans un cadre sobre et luxueux. Notre interface met en avant le talent et l'identité de chaque créateur·trice, sans compromis sur le style.</div>
+      </div>
+    </div>
+
+    <div class="about-feature">
+      <div class="about-feature-icon">◇</div>
+      <div class="about-feature-body">
+        <div class="about-feature-title">Une audience ciblée et respectueuse</div>
+        <div class="about-feature-text">Onyx Studio attire une communauté d'adultes avertis, venus découvrir des créateurs authentiques. Inscription obligatoire, modération active et règles de bonne conduite garantissent un environnement sain et bienveillant pour tous.</div>
+      </div>
     </div>
 
     <div class="about-feature">
       <div class="about-feature-icon">✦</div>
       <div class="about-feature-body">
-        <div class="about-feature-title">Une vitrine exclusive</div>
-        <div class="about-feature-text">Chaque modèle dispose d'une « case » personnalisée — un espace privé et élégant pour présenter ses photos, vidéos et biographie. La vitrine principale permet aux visiteurs de découvrir l'ensemble des talents disponibles.</div>
+        <div class="about-feature-title">Badge de vérification — gage d'authenticité</div>
+        <div class="about-feature-text">Les modèles vérifiés par notre équipe reçoivent un badge distinctif. Ce sceau d'authenticité rassure les visiteurs et valorise les créateurs dont l'identité et la démarche ont été validées. La confiance est au cœur de notre plateforme.</div>
       </div>
     </div>
 
     <div class="about-feature">
-      <div class="about-feature-icon">💬</div>
+      <div class="about-feature-icon">✉</div>
       <div class="about-feature-body">
-        <div class="about-feature-title">Messagerie privée en temps réel</div>
-        <div class="about-feature-text">Notre système de chat intégré permet aux visiteurs inscrits d'entrer en contact direct avec les modèles. Les échanges sont privés, sécurisés et se déroulent en temps réel grâce à Firebase.</div>
+        <div class="about-feature-title">Messagerie privée directe</div>
+        <div class="about-feature-text">Les visiteurs inscrits peuvent écrire en privé aux modèles de leur choix. Un système de messagerie en temps réel, sécurisé et discret, pour faciliter les échanges authentiques entre créateurs et leur audience.</div>
       </div>
     </div>
 
     <div class="about-feature">
-      <div class="about-feature-icon">🔒</div>
+      <div class="about-feature-icon">◉</div>
       <div class="about-feature-body">
-        <div class="about-feature-title">Sécurité & Confidentialité</div>
-        <div class="about-feature-text">La sécurité est notre priorité. Mots de passe hashés, vérification par email, protection anti-spam et système de modération avancé garantissent un environnement sain pour tous les utilisateurs.</div>
-      </div>
-    </div>
-
-    <div class="about-feature">
-      <div class="about-feature-icon">✓</div>
-      <div class="about-feature-body">
-        <div class="about-feature-title">Badge de vérification</div>
-        <div class="about-feature-text">Les modèles dont l'identité a été vérifiée par notre équipe reçoivent un badge bleu distinctif. Ce badge garantit aux visiteurs qu'ils interagissent avec un profil authentique.</div>
+        <div class="about-feature-title">Confidentialité & Sécurité renforcée</div>
+        <div class="about-feature-text">La protection des données est une priorité absolue. Chiffrement des mots de passe, vérification en deux étapes par e-mail, anti-spam et système de signalement permettent à chaque utilisateur d'évoluer dans un espace sécurisé et confidentiel.</div>
       </div>
     </div>
 
     <div class="about-feature">
       <div class="about-feature-icon">♥</div>
       <div class="about-feature-body">
-        <div class="about-feature-title">Communauté bienveillante</div>
-        <div class="about-feature-text">Système de likes, favoris permanents, commentaires et avis — chaque interaction enrichit l'expérience. Nos règles de modération strictes maintiennent un environnement respectueux pour chacun.</div>
+        <div class="about-feature-title">Favoris, likes & interactions</div>
+        <div class="about-feature-text">Sauvegardez vos modèles préférés, likez les profils qui vous inspirent et revenez facilement à vos créateurs favoris. Chaque interaction est un signal de reconnaissance pour les modèles qui travaillent dur pour leur communauté.</div>
       </div>
     </div>
 
-    <div style="margin-top:3rem;display:flex;gap:1rem;flex-wrap:wrap">
-      <button class="btn btn-primary" onclick="goHome()">Découvrir les modèles</button>
-      <button class="btn btn-outline" onclick="goPage('contact')">Nous contacter</button>
+    <!-- Chiffres / stats visuelles -->
+    <div style="margin:4rem 0;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(160,120,64,0.1)">
+      <div style="background:var(--bg-primary);padding:2rem 1.5rem;text-align:center">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;color:#c8a060">100%</div>
+        <div style="font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase;color:#7a6a58;margin-top:0.4rem">Profils vérifiés</div>
+      </div>
+      <div style="background:var(--bg-primary);padding:2rem 1.5rem;text-align:center;border-left:1px solid rgba(160,120,64,0.1);border-right:1px solid rgba(160,120,64,0.1)">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;color:#c8a060">24/7</div>
+        <div style="font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase;color:#7a6a58;margin-top:0.4rem">Modération active</div>
+      </div>
+      <div style="background:var(--bg-primary);padding:2rem 1.5rem;text-align:center">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;color:#c8a060">∞</div>
+        <div style="font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase;color:#7a6a58;margin-top:0.4rem">Créateurs à découvrir</div>
+      </div>
     </div>
+
+    <!-- CTA final -->
+    <div style="margin-top:3.5rem;padding:2.5rem;background:rgba(160,120,64,0.04);border:1px solid rgba(160,120,64,0.12);text-align:center">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:300;color:#e0d8c8;margin-bottom:0.75rem;font-style:italic">Prêt à découvrir nos créateurs ?</div>
+      <div style="font-size:0.78rem;color:#6a5a48;letter-spacing:0.06em;margin-bottom:2rem">Explorez la vitrine et entrez dans l'univers Onyx Studio.</div>
+      <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="goHome()">Découvrir les modèles</button>
+        <button class="btn btn-outline" onclick="goPage('contact')">Nous contacter</button>
+      </div>
+    </div>
+
     <div class="footer" style="margin-top:4rem">ONYX <span>STUDIO</span></div>
   </div>`;
 }
@@ -5503,7 +5591,7 @@ function renderContact() {
         🔒 Vos informations restent confidentielles et ne sont visibles que par l'équipe de modération.
       </div>
 
-      <button class="btn btn-primary" onclick="submitContactTicket()">Envoyer le message</button>
+      <button class="btn btn-primary" id="contact-submit-btn" onclick="submitContactTicket()">Envoyer le message</button>
     </div>
 
     <div style="margin-top:2rem;text-align:center">
