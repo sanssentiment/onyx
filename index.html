@@ -5306,7 +5306,7 @@ async function submitContactTicket() {
   const message = (document.getElementById("contact-message")?.value || "").trim();
   const errEl = document.getElementById("contact-err");
   const okEl = document.getElementById("contact-ok");
-  const btn = document.querySelector("#contact-submit-btn");
+  const btn = document.getElementById("contact-submit-btn");
   errEl?.classList.add("hidden");
   okEl?.classList.add("hidden");
 
@@ -5330,32 +5330,42 @@ async function submitContactTicket() {
 
   let saved = false;
 
-  // Tentative 1 : Firestore
   if (window._fb?.db) {
+    // Couche 1 : collection support_tickets (nécessite règle Firestore)
     try {
       await window._fb.db.collection("support_tickets").add(ticket);
-      await logActivityEvent("CONTACT", `Nouveau ticket de ${name} (${email}): ${subject}`, email);
       saved = true;
     } catch(e) {
-      console.warn("Firestore support_tickets refusé, tentative EmailJS…", e.code, e.message);
-      // Si règles Firestore bloquent, on tente EmailJS
+      console.warn("support_tickets refusé (" + e.code + "), tentative activity_log…");
+    }
+
+    // Couche 2 : activity_log — collection déjà autorisée, toujours disponible
+    try {
+      await window._fb.db.collection("activity_log").add({
+        type: "SUPPORT_TICKET",
+        actor: email,
+        details: `[TICKET] De: ${name} <${email}> | Sujet: ${ticket.subject} | Message: ${ticket.message}`,
+        userRole: ticket.userRole,
+        status: "open",
+        timestamp: Date.now()
+      });
+      if (!saved) saved = true; // compte comme sauvegardé
+    } catch(e) {
+      console.warn("activity_log write failed:", e.code);
     }
   }
 
-  // Tentative 2 : EmailJS (fallback)
-  if (!saved) {
-    try {
-      await emailjs.send("service_6lf32ud", "template_bz66viq", {
-        from_name: name,
-        from_email: email,
-        subject: subject,
-        message: message,
-        user_role: ticket.userRole
-      });
-      saved = true;
-    } catch(e) {
-      console.error("EmailJS fallback failed:", e);
-    }
+  // Couche 3 : EmailJS — envoie un email de notification
+  try {
+    await emailjs.send("service_6lf32ud", "template_bz66viq", {
+      to_email: "chutblanka@gmail.com",
+      to_name: "Onyx Studio Admin",
+      code: `TICKET — ${ticket.subject}`,
+      message: `De: ${name} (${email})\nSujet: ${ticket.subject}\n\n${ticket.message}`
+    });
+    if (!saved) saved = true;
+  } catch(e) {
+    console.warn("EmailJS notification failed:", e.text || e.message);
   }
 
   if (btn) { btn.disabled = false; btn.textContent = "Envoyer le message"; }
@@ -5365,10 +5375,10 @@ async function submitContactTicket() {
     okEl.classList.remove("hidden");
     document.getElementById("contact-name").value = "";
     document.getElementById("contact-email").value = "";
-    document.getElementById("contact-subject").value = "";
+    if (document.getElementById("contact-subject")) document.getElementById("contact-subject").value = "";
     document.getElementById("contact-message").value = "";
   } else {
-    errEl.textContent = "⚠️ Erreur lors de l'envoi. Veuillez réessayer ou nous écrire directement.";
+    errEl.textContent = "⚠️ Erreur lors de l'envoi. Veuillez réessayer.";
     errEl.classList.remove("hidden");
   }
 }
