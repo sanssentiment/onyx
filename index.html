@@ -672,12 +672,24 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .about-feature-text{font-size:0.78rem;color:#7a6a58;line-height:1.85;letter-spacing:0.03em}
 
 /* ── CONTACT / TICKETS ── */
-.ticket-item{background:rgba(160,120,64,0.04);border:1px solid rgba(160,120,64,0.1);padding:1.25rem 1.5rem;margin-bottom:1rem}
-.ticket-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;gap:1rem}
+.ticket-item{background:rgba(160,120,64,0.04);border:1px solid rgba(160,120,64,0.1);margin-bottom:1rem;overflow:hidden}
+.ticket-header{display:flex;justify-content:space-between;align-items:flex-start;padding:1.25rem 1.5rem;gap:1rem}
 .ticket-subject{font-weight:500;color:#e0d8c8;font-size:0.88rem}
 .ticket-meta{font-size:0.62rem;color:#6a5a48;letter-spacing:0.05em}
-.ticket-body{font-size:0.78rem;color:#8a7a6a;line-height:1.75}
+.ticket-body{font-size:0.78rem;color:#8a7a6a;line-height:1.75;padding:0 1.5rem 1rem}
 .ticket-email{font-size:0.68rem;color:#a07840;margin-top:0.4rem}
+.ticket-messages{border-top:1px solid rgba(160,120,64,0.1);padding:1rem 1.5rem;display:flex;flex-direction:column;gap:0.6rem}
+.ticket-msg{padding:0.65rem 0.9rem;font-size:0.78rem;line-height:1.65;max-width:85%;border-radius:2px}
+.ticket-msg-user{background:rgba(60,60,80,0.2);border:1px solid rgba(80,80,120,0.2);color:#c0c0e0;align-self:flex-start}
+.ticket-msg-admin{background:linear-gradient(135deg,rgba(140,100,40,0.25),rgba(90,60,20,0.15));border:1px solid rgba(160,120,64,0.3);color:#f0e8d0;align-self:flex-end}
+.ticket-msg-meta{font-size:0.58rem;color:#5a4a38;margin-top:0.2rem;letter-spacing:0.05em}
+.ticket-msg-meta-right{text-align:right}
+.ticket-reply-form{border-top:1px solid rgba(160,120,64,0.08);padding:0.9rem 1.5rem;display:flex;gap:0.6rem;align-items:flex-end;background:rgba(8,6,10,0.3)}
+.ticket-reply-input{flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(160,120,64,0.2);color:#e0d8c8;padding:0.6rem 0.9rem;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;border-radius:2px;resize:none;min-height:60px;transition:border-color 0.2s}
+.ticket-reply-input:focus{border-color:rgba(160,120,64,0.5)}
+.badge-open{background:rgba(40,120,60,0.15);border:1px solid rgba(60,160,80,0.3);color:#70c090}
+.badge-closed{background:rgba(60,60,60,0.15);border:1px solid rgba(100,100,100,0.3);color:#707070}
+.badge-replied{background:rgba(40,80,140,0.15);border:1px solid rgba(60,120,200,0.3);color:#80a0e0}
 .badge-open{background:rgba(70,160,80,0.15);border:1px solid rgba(70,160,80,0.3);color:#70c090}
 .badge-closed{background:rgba(60,60,80,0.15);border:1px solid rgba(80,80,120,0.2);color:#7070a0}
 
@@ -1381,7 +1393,7 @@ function render() {
   else if (currentPage === "edit") { root.innerHTML = renderEdit(); bindEditEvents(); }
   else if (currentPage === "admin" && session?.role === "admin") { root.innerHTML = renderAdmin(); loadAccountBanList(); loadIPBlacklist(); loadCombinedBanList(); renderAccountBanTable(); renderIPBlacklistTable(); renderCombinedBanTable(); renderAdminTickets(); renderAdminActivityLog(); }
   else if (currentPage === "about") { root.innerHTML = renderAbout(); }
-  else if (currentPage === "contact") { root.innerHTML = renderContact(); }
+  else if (currentPage === "contact") { root.innerHTML = renderContact(); _afterContactRender(); }
   else if (currentPage === "settings" && (session?.role === "model" || session?.role === "visitor" || session?.role === "admin")) { root.innerHTML = renderSettings(); }
   else if (currentPage === "conversationHistory" && session) { renderConversationHistoryAsync(); return; }
   else { goHome(); }
@@ -5315,109 +5327,105 @@ async function submitContactTicket() {
   if (!subject || subject.length < 3) { errEl.textContent = "⚠️ Veuillez sélectionner un sujet."; errEl.classList.remove("hidden"); return; }
   if (!message || message.length < 10) { errEl.textContent = "⚠️ Votre message doit contenir au moins 10 caractères."; errEl.classList.remove("hidden"); return; }
 
+  if (!window._fb?.db) { errEl.textContent = "⚠️ Service indisponible."; errEl.classList.remove("hidden"); return; }
+
   if (btn) { btn.disabled = true; btn.textContent = "Envoi en cours…"; }
 
-  const ticket = {
-    name: sanitizeInput(name),
-    email,
-    subject: sanitizeInput(subject),
-    message: sanitizeInput(message),
-    status: "open",
-    createdAt: Date.now(),
-    userId: session?.id || null,
-    userRole: session?.role || "anonymous"
-  };
-
-  let saved = false;
-
-  if (window._fb?.db) {
-    // Couche 1 : collection support_tickets (nécessite règle Firestore)
-    try {
-      await window._fb.db.collection("support_tickets").add(ticket);
-      saved = true;
-    } catch(e) {
-      console.warn("support_tickets refusé (" + e.code + "), tentative activity_log…");
-    }
-
-    // Couche 2 : activity_log — collection déjà autorisée, toujours disponible
-    try {
-      await window._fb.db.collection("activity_log").add({
-        type: "SUPPORT_TICKET",
-        actor: email,
-        details: `[TICKET] De: ${name} <${email}> | Sujet: ${ticket.subject} | Message: ${ticket.message}`,
-        userRole: ticket.userRole,
-        status: "open",
-        timestamp: Date.now()
-      });
-      if (!saved) saved = true; // compte comme sauvegardé
-    } catch(e) {
-      console.warn("activity_log write failed:", e.code);
-    }
-  }
-
-  // Couche 3 : EmailJS — envoie un email de notification
   try {
-    await emailjs.send("service_6lf32ud", "template_bz66viq", {
-      to_email: "chutblanka@gmail.com",
-      to_name: "Onyx Studio Admin",
-      code: `TICKET — ${ticket.subject}`,
-      message: `De: ${name} (${email})\nSujet: ${ticket.subject}\n\n${ticket.message}`
-    });
-    if (!saved) saved = true;
+    const ticket = {
+      name: sanitizeInput(name),
+      email,
+      subject: sanitizeInput(subject),
+      message: sanitizeInput(message),
+      status: "open",
+      createdAt: Date.now(),
+      userId: session?.id || null,
+      userRole: session?.role || "anonymous",
+      replies: []
+    };
+    await window._fb.db.collection("support_tickets").add(ticket);
+    okEl.textContent = "✅ Votre message a bien été envoyé. L'équipe vous répondra directement ici, dans la section « Mes tickets ».";
+    okEl.classList.remove("hidden");
+    if (document.getElementById("contact-name")) document.getElementById("contact-name").value = "";
+    if (document.getElementById("contact-email")) document.getElementById("contact-email").value = "";
+    if (document.getElementById("contact-subject")) document.getElementById("contact-subject").value = "";
+    if (document.getElementById("contact-message")) document.getElementById("contact-message").value = "";
   } catch(e) {
-    console.warn("EmailJS notification failed:", e.text || e.message);
+    errEl.textContent = "⚠️ Erreur lors de l'envoi (règles Firestore). Ajoutez la règle support_tickets dans Firebase Console.";
+    errEl.classList.remove("hidden");
+    console.error("support_tickets write error:", e.code, e.message);
   }
 
   if (btn) { btn.disabled = false; btn.textContent = "Envoyer le message"; }
-
-  if (saved) {
-    okEl.textContent = "✅ Votre message a bien été envoyé. L'équipe vous répondra dans les plus brefs délais.";
-    okEl.classList.remove("hidden");
-    document.getElementById("contact-name").value = "";
-    document.getElementById("contact-email").value = "";
-    if (document.getElementById("contact-subject")) document.getElementById("contact-subject").value = "";
-    document.getElementById("contact-message").value = "";
-  } else {
-    errEl.textContent = "⚠️ Erreur lors de l'envoi. Veuillez réessayer.";
-    errEl.classList.remove("hidden");
-  }
 }
 
+// ── ADMIN : liste des tickets avec dialogue ──
 async function renderAdminTickets() {
   const container = document.getElementById("admin-tickets-container");
   if (!container) return;
   if (!window._fb?.db) { container.innerHTML = '<div style="color:#5a4a38;padding:1rem;font-size:0.78rem">Firebase indisponible.</div>'; return; }
-  
+  container.innerHTML = '<div style="color:#5a4a38;font-size:0.72rem;padding:0.5rem 0">Chargement…</div>';
   try {
     const snap = await window._fb.db.collection("support_tickets").orderBy("createdAt", "desc").get();
     const tickets = [];
     snap.forEach(d => tickets.push({ id: d.id, ...d.data() }));
-    
     if (tickets.length === 0) {
       container.innerHTML = '<div style="color:#5a4a38;font-style:italic;font-size:0.78rem;padding:1rem 0">Aucun ticket de support.</div>';
       return;
     }
-    
     container.innerHTML = tickets.map(t => {
-      const date = new Date(t.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      return `<div class="ticket-item">
+      const date = new Date(t.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      const replies = t.replies || [];
+      const badgeClass = t.status === 'closed' ? 'badge-closed' : (replies.length > 0 ? 'badge-replied' : 'badge-open');
+      const badgeLabel = t.status === 'closed' ? '✓ Fermé' : (replies.length > 0 ? '💬 Répondu' : '🟢 Ouvert');
+      const repliesHtml = replies.map(r => {
+        const rDate = new Date(r.at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+        const isAdmin = r.role === 'admin';
+        return `<div>
+          <div class="ticket-msg ${isAdmin ? 'ticket-msg-admin' : 'ticket-msg-user'}">${escHtml(r.text)}</div>
+          <div class="ticket-msg-meta ${isAdmin ? 'ticket-msg-meta-right' : ''}">${isAdmin ? '👑 Admin' : escHtml(r.name)} · ${rDate}</div>
+        </div>`;
+      }).join('');
+      return `<div class="ticket-item" id="ticket-${t.id}">
         <div class="ticket-header">
           <div>
             <div class="ticket-subject">${escHtml(t.subject)}</div>
             <div class="ticket-email">De : ${escHtml(t.name)} &lt;${escHtml(t.email)}&gt; · ${date}</div>
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-shrink:0">
-            <span class="badge ${t.status === 'open' ? 'badge-open' : 'badge-closed'}">${t.status === 'open' ? '🟢 Ouvert' : '✓ Fermé'}</span>
+            <span class="badge ${badgeClass}">${badgeLabel}</span>
             ${t.status === 'open' ? `<button class="btn btn-ghost btn-sm" onclick="closeTicket('${t.id}')">Fermer</button>` : ''}
             <button class="btn btn-red btn-sm" onclick="deleteTicket('${t.id}')">Supprimer</button>
           </div>
         </div>
         <div class="ticket-body">${escHtml(t.message)}</div>
+        ${repliesHtml.length ? `<div class="ticket-messages">${repliesHtml}</div>` : ''}
+        ${t.status === 'open' ? `
+        <div class="ticket-reply-form">
+          <textarea class="ticket-reply-input" id="reply-${t.id}" placeholder="Répondre à ${escHtml(t.name)}…" rows="2"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="sendTicketReply('${t.id}','${escHtml(t.email)}','${escHtml(t.name)}')">Envoyer</button>
+        </div>` : ''}
       </div>`;
     }).join('');
   } catch(e) {
-    container.innerHTML = '<div style="color:#d07080;font-size:0.78rem;padding:1rem">Erreur: ' + escHtml(e.message) + '</div>';
+    container.innerHTML = '<div style="color:#d07080;font-size:0.78rem;padding:1rem">Erreur: ' + escHtml(e.message) + '<br><small style="color:#a07840">→ Ajoutez la règle support_tickets dans Firebase Console (voir commentaire en haut du fichier)</small></div>';
   }
+}
+
+async function sendTicketReply(ticketId, userEmail, userName) {
+  const input = document.getElementById("reply-" + ticketId);
+  const text = (input?.value || "").trim();
+  if (!text) return;
+  if (!window._fb?.db) return;
+  try {
+    const ticketRef = window._fb.db.collection("support_tickets").doc(ticketId);
+    const snap = await ticketRef.get();
+    const replies = snap.data()?.replies || [];
+    replies.push({ text: sanitizeInput(text), role: "admin", name: "Admin", at: Date.now() });
+    await ticketRef.update({ replies, status: "open" });
+    input.value = "";
+    renderAdminTickets();
+  } catch(e) { console.error("Reply error:", e); }
 }
 
 async function closeTicket(ticketId) {
@@ -5429,12 +5437,79 @@ async function closeTicket(ticketId) {
 }
 
 async function deleteTicket(ticketId) {
-  if (!confirm("Supprimer ce ticket ?")) return;
+  if (!confirm("Supprimer ce ticket définitivement ?")) return;
   if (!window._fb?.db) return;
   try {
     await window._fb.db.collection("support_tickets").doc(ticketId).delete();
     renderAdminTickets();
   } catch(e) { console.error(e); }
+}
+
+// ── UTILISATEUR : voir ses propres tickets et réponses ──
+async function renderMyTickets() {
+  const container = document.getElementById("my-tickets-container");
+  if (!container) return;
+  if (!session?.email || !window._fb?.db) return;
+  container.innerHTML = '<div style="color:#5a4a38;font-size:0.72rem;padding:0.5rem 0">Chargement…</div>';
+  try {
+    const snap = await window._fb.db.collection("support_tickets")
+      .where("email", "==", session.email)
+      .orderBy("createdAt", "desc").get();
+    const tickets = [];
+    snap.forEach(d => tickets.push({ id: d.id, ...d.data() }));
+    if (tickets.length === 0) {
+      container.innerHTML = '<div style="color:#5a4a38;font-style:italic;font-size:0.78rem;padding:1rem 0">Vous n\'avez aucun ticket pour le moment.</div>';
+      return;
+    }
+    container.innerHTML = tickets.map(t => {
+      const date = new Date(t.createdAt).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+      const replies = t.replies || [];
+      const hasAdminReply = replies.some(r => r.role === 'admin');
+      const badgeClass = t.status === 'closed' ? 'badge-closed' : (hasAdminReply ? 'badge-replied' : 'badge-open');
+      const badgeLabel = t.status === 'closed' ? '✓ Fermé' : (hasAdminReply ? '💬 Répondu' : '🟢 En attente');
+      const repliesHtml = replies.map(r => {
+        const rDate = new Date(r.at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+        const isAdmin = r.role === 'admin';
+        return `<div>
+          <div class="ticket-msg ${isAdmin ? 'ticket-msg-admin' : 'ticket-msg-user'}">${escHtml(r.text)}</div>
+          <div class="ticket-msg-meta ${isAdmin ? 'ticket-msg-meta-right' : ''}">${isAdmin ? '👑 Équipe Onyx' : 'Vous'} · ${rDate}</div>
+        </div>`;
+      }).join('');
+      return `<div class="ticket-item">
+        <div class="ticket-header">
+          <div>
+            <div class="ticket-subject">${escHtml(t.subject)}</div>
+            <div class="ticket-email">${date}</div>
+          </div>
+          <span class="badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        <div class="ticket-body">${escHtml(t.message)}</div>
+        ${repliesHtml.length ? `<div class="ticket-messages">${repliesHtml}</div>` : ''}
+        ${t.status === 'open' ? `
+        <div class="ticket-reply-form">
+          <textarea class="ticket-reply-input" id="ureply-${t.id}" placeholder="Ajouter un message…" rows="2"></textarea>
+          <button class="btn btn-ghost btn-sm" onclick="sendUserTicketReply('${t.id}')">Envoyer</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div style="color:#d07080;font-size:0.78rem">Erreur chargement tickets: ' + escHtml(e.message) + '</div>';
+  }
+}
+
+async function sendUserTicketReply(ticketId) {
+  const input = document.getElementById("ureply-" + ticketId);
+  const text = (input?.value || "").trim();
+  if (!text || !session?.email || !window._fb?.db) return;
+  try {
+    const ticketRef = window._fb.db.collection("support_tickets").doc(ticketId);
+    const snap = await ticketRef.get();
+    const replies = snap.data()?.replies || [];
+    replies.push({ text: sanitizeInput(text), role: "user", name: session.name || session.email, at: Date.now() });
+    await ticketRef.update({ replies });
+    input.value = "";
+    renderMyTickets();
+  } catch(e) { console.error("User reply error:", e); }
 }
 
 // ── PAGE À PROPOS ──
@@ -5555,13 +5630,30 @@ function renderAbout() {
 
 // ── PAGE CONTACT ──
 function renderContact() {
+  const myTicketsSection = session ? `
+    <div style="margin-top:3rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:1rem">
+        <div>
+          <div class="section-label">Historique</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:300;color:#e8e0d0">Mes <em>tickets</em></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="renderMyTickets()">↻ Rafraîchir</button>
+      </div>
+      <div id="my-tickets-container" style="min-height:60px">
+        <div style="color:#5a4a38;font-size:0.72rem;font-style:italic">Chargement de vos tickets…</div>
+      </div>
+    </div>` : `
+    <div style="margin-top:2rem;padding:1.5rem;background:rgba(160,120,64,0.04);border:1px solid rgba(160,120,64,0.1);text-align:center">
+      <div style="font-size:0.78rem;color:#7a6a58;line-height:1.7">Connectez-vous pour suivre vos tickets et voir les réponses de l'équipe.</div>
+    </div>`;
+
   return `<div class="about-section">
     <div style="margin-bottom:3rem">
       <div class="section-label">Support</div>
       <div class="section-title">Nous <em>contacter</em></div>
       <div class="section-divider"></div>
       <p style="font-size:0.82rem;color:#7a6a58;line-height:1.85;margin-top:1.2rem">
-        Une question, un problème, une demande de vérification ? Notre équipe examine chaque message et vous répondra dans les meilleurs délais.
+        Une question, un problème, une demande de vérification ? Notre équipe vous répondra directement sur cette page.
       </p>
     </div>
 
@@ -5604,11 +5696,17 @@ function renderContact() {
       <button class="btn btn-primary" id="contact-submit-btn" onclick="submitContactTicket()">Envoyer le message</button>
     </div>
 
-    <div style="margin-top:2rem;text-align:center">
+    ${myTicketsSection}
+
+    <div style="margin-top:2.5rem;text-align:center">
       <button class="btn btn-outline" onclick="goPage('about')">← À propos</button>
     </div>
     <div class="footer" style="margin-top:4rem">ONYX <span>STUDIO</span></div>
   </div>`;
+}
+
+function _afterContactRender() {
+  if (session) renderMyTickets();
 }
 
 // ── NOTIFICATIONS IN-APP ──
