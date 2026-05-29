@@ -4195,11 +4195,34 @@ function renderForgotPassword() {
       <div class="login-logo">Onyx</div>
       <div class="login-sub">Mot de passe oublié</div>
       <div class="login-sep"></div>
-      <p style="text-align:center;font-size:0.75rem;color:#8a7a6a;line-height:1.8;margin-bottom:1.5rem">Entrez votre e-mail. Firebase vous enverra un lien pour créer un nouveau mot de passe.</p>
       <div id="fp-err" class="alert alert-err hidden"></div>
       <div id="fp-ok" class="alert alert-ok hidden"></div>
-      <div class="field"><label>Adresse e-mail</label><input class="input" id="fp-email" type="email" placeholder="vous@email.com" onkeydown="if(event.key==='Enter')submitForgotPassword()" /></div>
-      <button class="btn btn-primary" style="width:100%;padding:0.9rem;margin-top:0.5rem" onclick="submitForgotPassword()">Envoyer le lien par e-mail</button>
+
+      <!-- Étape 1 : saisie email -->
+      <div id="fp-step1">
+        <p style="text-align:center;font-size:0.75rem;color:#8a7a6a;line-height:1.8;margin-bottom:1.5rem">Entrez votre e-mail pour recevoir un code de réinitialisation.</p>
+        <div class="field"><label>Adresse e-mail</label><input class="input" id="fp-email" type="email" placeholder="vous@email.com" onkeydown="if(event.key==='Enter')submitForgotPassword()" /></div>
+        <button class="btn btn-primary" style="width:100%;padding:0.9rem;margin-top:0.5rem" onclick="submitForgotPassword()">Envoyer le code par e-mail</button>
+      </div>
+
+      <!-- Étape 2 : saisie du code reçu -->
+      <div id="fp-step2" class="hidden">
+        <p style="text-align:center;font-size:0.75rem;color:#a07840;line-height:1.8;margin-bottom:1.5rem">Un code à 6 chiffres a été envoyé à <strong id="fp-email-display"></strong></p>
+        <div class="field"><label>Code de vérification</label><input class="input" id="fp-code" type="text" placeholder="123456" maxlength="6" style="text-align:center;letter-spacing:0.5em;font-size:1.2rem" onkeydown="if(event.key==='Enter')verifyPasswordResetCode()" /></div>
+        <button class="btn btn-primary" style="width:100%;padding:0.9rem;margin-top:0.5rem" onclick="verifyPasswordResetCode()">Vérifier le code</button>
+        <div style="margin-top:1rem;text-align:center">
+          <p style="font-size:0.68rem;color:#7a6a58">Code non reçu ? <span style="color:#c8a060;cursor:pointer;text-decoration:underline" onclick="submitForgotPassword()">Renvoyer</span></p>
+        </div>
+      </div>
+
+      <!-- Étape 3 : nouveau mot de passe -->
+      <div id="fp-step3" class="hidden">
+        <p style="text-align:center;font-size:0.75rem;color:#a07840;line-height:1.8;margin-bottom:1.5rem">Code validé ✅ Choisissez votre nouveau mot de passe.</p>
+        <div class="field"><label>Nouveau mot de passe</label><div class="pass-wrap"><input class="input" id="fp-new-pass" type="password" placeholder="••••••••" /></div></div>
+        <div class="field"><label>Confirmer le mot de passe</label><div class="pass-wrap"><input class="input" id="fp-new-pass2" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitNewPasswordFromReset()" /></div></div>
+        <button class="btn btn-primary" style="width:100%;padding:0.9rem;margin-top:0.5rem" onclick="submitNewPasswordFromReset()">Enregistrer le nouveau mot de passe</button>
+      </div>
+
       <div style="margin-top:1.5rem;text-align:center">
         <p style="font-size:0.68rem;color:#5a4a38;cursor:pointer" onclick="goPage('login')">← Retour à la connexion</p>
       </div>
