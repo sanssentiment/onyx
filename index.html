@@ -1348,6 +1348,8 @@ let editDraftPhotos = []; // {url, name, blob}
 let editDraftVideos = [];
 let searchQuery = "";
 let securityLogs = [];
+let _passwordResetEmail = null;
+let _passwordResetCode = null;
 
 // ── SECURITY LOGS ──
 function logSecurityEvent(type, details) {
@@ -1576,6 +1578,9 @@ async function login() {
     errEl.textContent = "⚠️ Veuillez entrer votre mot de passe.";
     errEl.classList.remove("hidden"); return;
   }
+
+  // Recharger les modèles depuis Firebase pour avoir les données à jour
+  try { await loadModelsFromFirebase(); } catch(e) {}
 
   // Vérification IP blacklist
   const userIP = await getUserIP();
@@ -1894,10 +1899,9 @@ async function verifyRegistrationCode() {
   }
 
   // Create the account
-  const { name, email, pass, existing } = _registrationData;
-
-  // Hash the password before storing
-  const hashedPass = await hashPassword(pass);
+  // pass is already hashed (stored as _tempHash), _plain is the original password for Firebase Auth
+  const { name, email, pass, existing, _plain } = _registrationData;
+  const hashedPass = pass; // already hashed, do NOT hash again
 
   if (existing) {
     // Admin created the case, visitor now sets password
@@ -1905,7 +1909,7 @@ async function verifyRegistrationCode() {
     existing.mustChangePassword = false;
     existing.name = existing.name || name;
     try { await saveModelToFirebase(existing); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
+    try { await syncFirebaseAuthUser(email, _plain, true); } catch (e) {  }
     session = { email: existing.email, role: existing.role, name: existing.name, id: existing.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -1921,7 +1925,7 @@ async function verifyRegistrationCode() {
     };
     models.push(newUser);
     try { await saveModelToFirebase(newUser); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
+    try { await syncFirebaseAuthUser(email, _plain, true); } catch (e) {  }
     session = { email: newUser.email, role: "visitor", name: newUser.name, id: newUser.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -2066,10 +2070,9 @@ async function verifyRegistrationCode() {
   }
 
   // Create the account
-  const { name, email, pass, existing } = _registrationData;
-
-  // Hash the password before storing
-  const hashedPass = await hashPassword(pass);
+  // pass is already hashed (stored as _tempHash), _plain is the original password for Firebase Auth
+  const { name, email, pass, existing, _plain } = _registrationData;
+  const hashedPass = pass; // already hashed, do NOT hash again
 
   if (existing) {
     // Admin created the case, visitor now sets password
@@ -2077,7 +2080,7 @@ async function verifyRegistrationCode() {
     existing.mustChangePassword = false;
     existing.name = existing.name || name;
     try { await saveModelToFirebase(existing); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
+    try { await syncFirebaseAuthUser(email, _plain, true); } catch (e) {  }
     session = { email: existing.email, role: existing.role, name: existing.name, id: existing.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -2093,7 +2096,7 @@ async function verifyRegistrationCode() {
     };
     models.push(newUser);
     try { await saveModelToFirebase(newUser); } catch(e) {}
-    try { await syncFirebaseAuthUser(email, pass, true); } catch (e) {  }
+    try { await syncFirebaseAuthUser(email, _plain, true); } catch (e) {  }
     session = { email: newUser.email, role: "visitor", name: newUser.name, id: newUser.id };
     saveSession(session);
     await loadFavoritesFromFirebase();
@@ -2365,23 +2368,204 @@ async function submitForgotPassword() {
     errEl.classList.remove("hidden"); return;
   }
   
-  if (!window._auth) {
-    errEl.textContent = "⚠️ Service indisponible. Veuillez réessayer plus tard.";
+  // Recharger les modèles depuis Firebase pour vérifier si l'email existe
+  try { await loadModelsFromFirebase(); } catch(e) {}
+  
+  // Vérifier si l'email existe dans la base ou si c'est l'admin
+  let user = models.find(x => x.email.toLowerCase() === email);
+  let isAdmin = false;
+  
+  // Vérifier aussi si c'est le compte admin
+  if (!user && email === ADMIN.email.toLowerCase()) {
+    user = { email: ADMIN.email, name: "Admin", id: "admin", role: "admin" };
+    isAdmin = true;
+  }
+  
+  if (!user) {
+    errEl.textContent = "⚠️ Aucun compte trouvé avec cet e-mail.";
     errEl.classList.remove("hidden"); return;
   }
-  try {
-    await window._auth.auth.sendPasswordResetEmail(email);
-    okEl.textContent = "✅ Un e-mail de réinitialisation a été envoyé. Vérifiez votre boîte mail (et les spams).";
-    okEl.classList.remove("hidden");
-  } catch (e) {
-    if (e.code === "auth/user-not-found") {
-      okEl.textContent = "✅ Si un compte existe avec cet e-mail, vous recevrez un lien de réinitialisation.";
-      okEl.classList.remove("hidden");
-    } else {
-      errEl.textContent = "⚠️ Erreur : " + (e.message || "veuillez réessayer");
-      errEl.classList.remove("hidden");
+  
+  // Générer un code de réinitialisation à 6 chiffres
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  
+  // Sauvegarder le code dans Firebase
+  if (window._fb?.db) {
+    try {
+      const { db } = window._fb;
+      await db.collection("password_reset").doc(sanitizeRtdbKey(email)).set({
+        code: code,
+        email: email,
+        userId: user.id,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 15 * 60 * 1000 // 15 minutes
+      });
+    } catch (e) {
+      console.error("Error storing reset code:", e);
     }
   }
+  
+  // Stocker temporairement pour vérification
+  _passwordResetEmail = email;
+  _passwordResetCode = code;
+  
+  // Envoyer l'email avec EmailJS
+  try {
+    await emailjs.send("service_6lf32ud", "template_bz66viq", {
+      to_email: email,
+      to_name: user.name,
+      code: code,
+      message: "Voici votre code de réinitialisation de mot de passe pour Onyx Studio"
+    });
+    
+    okEl.textContent = "✅ Code de réinitialisation envoyé par email ! Vérifiez votre boîte mail (et les spams).";
+    okEl.classList.remove("hidden");
+    
+    // Passer à l'étape de vérification
+    document.getElementById("fp-step1").classList.add("hidden");
+    document.getElementById("fp-step2").classList.remove("hidden");
+    document.getElementById("fp-email-display").textContent = email;
+    document.getElementById("fp-code").value = "";
+    document.getElementById("fp-code").focus();
+  } catch (e) {
+    console.error("Error sending email:", e);
+    errEl.textContent = "⚠️ Erreur lors de l'envoi de l'email : " + (e.text || e.message || "Erreur inconnue");
+    errEl.classList.remove("hidden");
+  }
+}
+
+async function verifyPasswordResetCode() {
+  const code = document.getElementById("fp-code").value.trim();
+  const errEl = document.getElementById("fp-err");
+  errEl.classList.add("hidden");
+  
+  if (!code || code.length !== 6) {
+    errEl.textContent = "⚠️ Veuillez entrer le code à 6 chiffres reçu par email.";
+    errEl.classList.remove("hidden"); return;
+  }
+  
+  if (!_passwordResetEmail || !_passwordResetCode) {
+    errEl.textContent = "⚠️ Session expirée. Veuillez recommencer.";
+    errEl.classList.remove("hidden");
+    backToForgotPasswordForm();
+    return;
+  }
+  
+  // Vérifier contre Firebase
+  let isValid = false;
+  if (window._fb?.db) {
+    try {
+      const { db } = window._fb;
+      const snap = await db.collection("password_reset").doc(sanitizeRtdbKey(_passwordResetEmail)).get();
+      if (snap.exists) {
+        const data = snap.data();
+        if (data.code === code && data.expiresAt > Date.now()) {
+          isValid = true;
+        }
+      }
+    } catch (e) {
+      console.error("Error verifying reset code:", e);
+    }
+  }
+  
+  // Fallback mémoire
+  if (!isValid && code === _passwordResetCode) {
+    isValid = true;
+  }
+  
+  if (!isValid) {
+    errEl.textContent = "⚠️ Code incorrect ou expiré. Veuillez réessayer.";
+    errEl.classList.remove("hidden"); return;
+  }
+  
+  // Passer à l'étape de nouveau mot de passe
+  document.getElementById("fp-step2").classList.add("hidden");
+  document.getElementById("fp-step3").classList.remove("hidden");
+  document.getElementById("fp-new-pass").value = "";
+  document.getElementById("fp-new-pass2").value = "";
+  document.getElementById("fp-new-pass").focus();
+}
+
+async function submitNewPasswordFromReset() {
+  const pass1 = document.getElementById("fp-new-pass").value;
+  const pass2 = document.getElementById("fp-new-pass2").value;
+  const errEl = document.getElementById("fp-err");
+  errEl.classList.add("hidden");
+  
+  if (!pass1 || pass1.length < 6) {
+    errEl.textContent = "⚠️ Le mot de passe doit contenir au moins 6 caractères.";
+    errEl.classList.remove("hidden"); return;
+  }
+  
+  if (pass1 !== pass2) {
+    errEl.textContent = "⚠️ Les mots de passe ne correspondent pas.";
+    errEl.classList.remove("hidden"); return;
+  }
+  
+  if (!_passwordResetEmail) {
+    errEl.textContent = "⚠️ Session expirée. Veuillez recommencer.";
+    errEl.classList.remove("hidden"); return;
+  }
+  
+  // Recharger les modèles pour avoir les données à jour
+  try { await loadModelsFromFirebase(); } catch(e) {}
+  
+  // Trouver l'utilisateur et mettre à jour le mot de passe
+  const user = models.find(x => x.email.toLowerCase() === _passwordResetEmail);
+  if (!user) {
+    errEl.textContent = "⚠️ Compte introuvable.";
+    errEl.classList.remove("hidden"); return;
+  }
+  
+  // Hasher le nouveau mot de passe
+  const hashedPass = await hashPassword(pass1);
+  user.password = hashedPass;
+  user.mustChangePassword = false;
+  
+  // Sauvegarder dans Firebase
+  try {
+    await saveModelToFirebase(user);
+    
+    // Mettre à jour Firebase Auth si disponible
+    if (window._auth) {
+      try {
+        await syncFirebaseAuthUser(user.email, pass1, true);
+      } catch (e) {
+        console.error("Error updating Firebase Auth:", e);
+      }
+    }
+    
+    // Nettoyer les données temporaires
+    const emailToClean = _passwordResetEmail; // sauvegarder avant de nullifier
+    _passwordResetEmail = null;
+    _passwordResetCode = null;
+    
+    // Supprimer le code de réinitialisation de Firebase
+    if (window._fb?.db) {
+      try {
+        await window._fb.db.collection("password_reset").doc(sanitizeRtdbKey(emailToClean)).delete();
+      } catch (e) {}
+    }
+    
+    alert("✅ Mot de passe mis à jour avec succès ! Vous pouvez maintenant vous connecter.");
+    goPage("login");
+  } catch (e) {
+    console.error("Error updating password:", e);
+    errEl.textContent = "⚠️ Erreur lors de la mise à jour du mot de passe.";
+    errEl.classList.remove("hidden");
+  }
+}
+
+function backToForgotPasswordForm() {
+  document.getElementById("fp-step1").classList.remove("hidden");
+  document.getElementById("fp-step2").classList.add("hidden");
+  document.getElementById("fp-step3").classList.add("hidden");
+  document.getElementById("fp-err").classList.add("hidden");
+  document.getElementById("fp-code").value = "";
+  document.getElementById("fp-new-pass").value = "";
+  document.getElementById("fp-new-pass2").value = "";
+  _passwordResetEmail = null;
+  _passwordResetCode = null;
 }
 
 function triggerAvatarUpload() {
@@ -2825,7 +3009,7 @@ function renderLogin() {
       <div class="login-sep"></div>
       <div id="login-err" class="alert alert-err hidden"></div>
       <div class="field"><label>Adresse e-mail</label><input class="input" id="login-email" type="email" placeholder="vous@email.com" onkeydown="if(event.key==='Enter')login()" /></div>
-      <div class="field"><label>Mot de passe</label><div class="pass-wrap"><input class="input" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()" /><button class="eye-btn" type="button" onclick="toggleEye('login-pass',this)" tabindex="-1">👁</button></div></div>
+      <div class="field"><label>Mot de passe</label><div class="pass-wrap"><input class="input" id="login-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()" /><button class="eye-btn" type="button" onclick="toggleEye('login-pass',this)" tabindex="-1"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem">
         <input type="checkbox" id="login-remember" checked style="width:18px;height:18px;cursor:pointer" />
         <label for="login-remember" style="font-size:0.72rem;color:#7a6a58;cursor:pointer;letter-spacing:0.05em">Se souvenir de moi (connexion permanente)</label>
@@ -2855,7 +3039,7 @@ function renderRegister() {
       <div id="reg-step1">
         <div class="field"><label>Prénom / Pseudo *</label><input class="input" id="reg-name" type="text" placeholder="Isabelle" /></div>
         <div class="field"><label>Adresse e-mail *</label><input class="input" id="reg-email" type="email" placeholder="vous@email.com" /></div>
-        <div class="field"><label>Mot de passe *</label><div class="pass-wrap"><input class="input" id="reg-pass" type="password" placeholder="••••••••" /><button class="eye-btn" type="button" onclick="toggleEye('reg-pass',this)" tabindex="-1">👁</button></div></div>
+        <div class="field"><label>Mot de passe *</label><div class="pass-wrap"><input class="input" id="reg-pass" type="password" placeholder="••••••••" /><button class="eye-btn" type="button" onclick="toggleEye('reg-pass',this)" tabindex="-1"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
         <div class="field"><label>Confirmer le mot de passe *</label><div class="pass-wrap"><input class="input" id="reg-pass2" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')sendRegistrationVerificationCode()" /></div></div>
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem">
           <input type="checkbox" id="reg-remember" checked style="width:18px;height:18px;cursor:pointer" />
@@ -4090,36 +4274,21 @@ async function sendVerificationCode() {
     }
   }
 
-  // Envoyer l'email avec Resend (gratuit, 3000 emails/mois)
+  // Envoyer l'email avec EmailJS (même service que l'inscription)
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Authorization": "re_eHcQAJvV_QKxrJvuYaWnRj4cqD3yt8TC9",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        from: "Onyx Studio <noreply@votredomaine.com>",
-        to: [email],
-        subject: "Votre code de connexion Onyx Studio",
-        html: `
-          <h2>Code de connexion</h2>
-          <p>Votre code de vérification est : <strong>${code}</strong></p>
-          <p>Ce code expire dans 15 minutes.</p>
-        `
-      })
+    await emailjs.send("service_6lf32ud", "template_bz66viq", {
+      to_email: email,
+      to_name: m.name || email,
+      code: code,
+      message: "Voici votre code de connexion pour Onyx Studio"
     });
-    
-    if (response.ok) {
-      okEl.textContent = "✅ Code envoyé par email !";
-      okEl.classList.remove("hidden");
-    } else {
-      throw new Error("Erreur envoi");
-    }
+    okEl.textContent = "✅ Code envoyé par email ! Vérifiez votre boîte mail (et les spams).";
+    okEl.classList.remove("hidden");
   } catch (e) {
     console.error("Erreur envoi email:", e);
-    // Fallback: afficher le code en cas d'erreur
-    alert("Code de vérification (mode test): " + code);
+    errEl.textContent = "⚠️ Erreur lors de l'envoi de l'email : " + (e.text || e.message || "Erreur inconnue");
+    errEl.classList.remove("hidden");
+    return;
   }
 
   // Afficher l'étape 2
@@ -5400,13 +5569,15 @@ async function debugModel(id) {
 function toggleEye(inputId, btn) {
   const inp = document.getElementById(inputId);
   if (!inp) return;
+  const eyeOpen = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+  const eyeClosed = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
   if (inp.type === "password") {
     inp.type = "text";
-    btn.textContent = "🙈";
+    btn.innerHTML = eyeClosed;
     btn.title = "Masquer";
   } else {
     inp.type = "password";
-    btn.textContent = "👁";
+    btn.innerHTML = eyeOpen;
     btn.title = "Afficher";
   }
 }
