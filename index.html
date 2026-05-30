@@ -867,28 +867,125 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 </div>
 
 <!-- ═══ NEW MODEL MODAL ═══ -->
+<style>
+.nm-modal{background:linear-gradient(160deg,#100c18 0%,#0e0a12 60%,#12090e 100%);border:1px solid rgba(160,120,64,0.22);width:100%;max-width:580px;position:relative;margin:auto;border-radius:2px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.7),0 0 0 1px rgba(160,120,64,0.06) inset}
+.nm-header{padding:2.2rem 2.5rem 1.6rem;background:linear-gradient(135deg,rgba(160,120,40,0.07),rgba(90,50,30,0.05));border-bottom:1px solid rgba(160,120,64,0.1);position:relative}
+.nm-header-eyebrow{font-size:0.58rem;letter-spacing:0.45em;text-transform:uppercase;color:#a07840;margin-bottom:0.6rem;display:flex;align-items:center;gap:0.6rem}
+.nm-header-eyebrow::before{content:'';width:20px;height:1px;background:linear-gradient(90deg,transparent,#a07840)}
+.nm-title{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;color:#e8e0d0;letter-spacing:0.02em}
+.nm-body{padding:2rem 2.5rem}
+.nm-field{margin-bottom:1.4rem;position:relative}
+.nm-label{display:block;font-size:0.6rem;letter-spacing:0.25em;text-transform:uppercase;color:#7a6a58;margin-bottom:0.55rem;transition:color 0.2s}
+.nm-input{width:100%;background:rgba(255,255,255,0.025);border:1px solid rgba(160,120,64,0.16);color:#e0d8c8;padding:0.8rem 1.1rem;font-family:'Jost',sans-serif;font-size:0.87rem;outline:none;transition:border-color 0.25s,background 0.25s,box-shadow 0.25s;border-radius:2px}
+.nm-input:focus{border-color:rgba(160,120,64,0.5);background:rgba(160,120,64,0.04);box-shadow:0 0 0 3px rgba(160,120,64,0.09)}
+.nm-input::placeholder{color:rgba(138,122,106,0.35)}
+.nm-input.valid{border-color:rgba(80,160,100,0.4);background:rgba(80,160,100,0.03)}
+.nm-input.invalid{border-color:rgba(180,60,80,0.4);background:rgba(180,60,80,0.03)}
+.nm-input-icon{position:relative}
+.nm-input-icon .nm-input{padding-right:2.5rem}
+.nm-valid-dot{position:absolute;right:0.9rem;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#50a060;opacity:0;transition:opacity 0.3s}
+.nm-valid-dot.show{opacity:1}
+.nm-row{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem}
+.nm-select{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23a07840'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 1rem center;background-color:rgba(255,255,255,0.025)}
+.nm-select option{background:#12090e;color:#e0d8c8}
+.nm-textarea{resize:none;min-height:90px;line-height:1.7}
+.nm-hint{display:flex;align-items:flex-start;gap:0.6rem;background:rgba(160,120,64,0.05);border:1px solid rgba(160,120,64,0.13);padding:0.9rem 1.1rem;font-size:0.71rem;color:#a07840;letter-spacing:0.04em;border-radius:2px;line-height:1.6}
+.nm-hint-icon{flex-shrink:0;font-size:1rem;margin-top:0.05rem}
+.nm-footer{padding:1.4rem 2.5rem;border-top:1px solid rgba(160,120,64,0.1);display:flex;justify-content:flex-end;gap:0.9rem;align-items:center;background:rgba(8,6,10,0.4)}
+.nm-err{background:rgba(180,40,60,0.08);border:1px solid rgba(180,60,80,0.3);color:#d07080;padding:0.7rem 1rem;font-size:0.75rem;letter-spacing:0.05em;border-radius:2px;margin-bottom:1.2rem}
+
+/* ═══ PROMOTE MODAL ═══ */
+.promote-modal-overlay{position:fixed;inset:0;background:rgba(4,3,6,0.94);z-index:800;display:flex;align-items:center;justify-content:center;padding:1.5rem;backdrop-filter:blur(8px)}
+.promote-modal{background:linear-gradient(160deg,#100c18 0%,#0e0a12 100%);border:1px solid rgba(160,120,64,0.22);width:100%;max-width:460px;border-radius:2px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,0.7)}
+.promote-modal-header{padding:1.8rem 2rem 1.4rem;background:linear-gradient(135deg,rgba(140,80,40,0.1),rgba(90,50,30,0.06));border-bottom:1px solid rgba(160,120,64,0.1)}
+.promote-modal-eyebrow{font-size:0.58rem;letter-spacing:0.4em;text-transform:uppercase;color:#a07840;margin-bottom:0.5rem}
+.promote-modal-title{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:300;color:#e8e0d0}
+.promote-modal-body{padding:1.6rem 2rem}
+.promote-user-card{display:flex;align-items:center;gap:1.1rem;background:rgba(160,120,64,0.05);border:1px solid rgba(160,120,64,0.14);padding:1.1rem 1.3rem;border-radius:2px;margin-bottom:1.4rem}
+.promote-user-avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,rgba(80,80,120,0.25),rgba(60,60,100,0.15));border:1px solid rgba(80,80,140,0.3);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:1.4rem;color:#9090c0;flex-shrink:0}
+.promote-user-info{flex:1}
+.promote-user-name{color:#e0d8c8;font-size:0.95rem;font-weight:500;margin-bottom:0.2rem}
+.promote-user-email{color:#6a5a48;font-size:0.75rem}
+.promote-arrow{color:#c8a060;font-size:1.5rem;animation:pulse-arrow 1.8s ease-in-out infinite}
+@keyframes pulse-arrow{0%,100%{opacity:0.5;transform:scale(0.95)}50%{opacity:1;transform:scale(1.05)}}
+.promote-role-badge{display:flex;align-items:center;gap:0.5rem;background:rgba(160,120,40,0.1);border:1px solid rgba(160,120,40,0.28);padding:0.6rem 1rem;border-radius:20px;font-size:0.75rem;color:#c8a060;letter-spacing:0.1em;text-transform:uppercase;white-space:nowrap}
+.promote-info-text{font-size:0.78rem;color:#6a5a48;line-height:1.8;letter-spacing:0.03em}
+.promote-modal-footer{padding:1.3rem 2rem;border-top:1px solid rgba(160,120,64,0.1);display:flex;justify-content:flex-end;gap:0.8rem;background:rgba(8,6,10,0.4)}
+</style>
+
 <div class="backdrop hidden" id="new-model-modal" onclick="closeNewModelModal(event)">
-  <div class="modal" style="max-width:560px" onclick="event.stopPropagation()">
-    <div class="modal-hero" style="display:block">
-      <div class="modal-tag">Administration</div>
-      <div class="modal-name">Créer une nouvelle case</div>
+  <div class="nm-modal" onclick="event.stopPropagation()">
+    <div class="nm-header">
+      <div class="nm-header-eyebrow">Administration</div>
+      <div class="nm-title">Nouvelle case</div>
     </div>
     <button class="modal-close" onclick="closeNewModelModal()">×</button>
-    <div class="modal-body">
-      <div id="new-model-err" class="alert alert-err hidden"></div>
-      <div class="form-row">
-        <div class="field"><label>Prénom / Pseudo *</label><input class="input" id="new-name" placeholder="Isabelle" /></div>
-        <div class="field"><label>Rôle *</label><select class="input input-select" id="new-role"><option value="model">Modèle</option><option value="admin">Admin</option></select></div>
+    <div class="nm-body">
+      <div id="new-model-err" class="nm-err hidden"></div>
+      <div class="nm-row">
+        <div class="nm-field">
+          <label class="nm-label">Prénom / Pseudo *</label>
+          <div class="nm-input-icon">
+            <input class="nm-input" id="new-name" placeholder="Isabelle" oninput="nmValidate()" />
+            <div class="nm-valid-dot" id="nm-name-dot"></div>
+          </div>
+        </div>
+        <div class="nm-field">
+          <label class="nm-label">Rôle *</label>
+          <select class="nm-input nm-select" id="new-role">
+            <option value="model">✦ Modèle</option>
+            <option value="admin">⚙ Admin</option>
+          </select>
+        </div>
       </div>
-      <div class="field"><label>Adresse e-mail *</label><input class="input" id="new-email" type="email" placeholder="prenom@email.com" /></div>
-      <div class="field"><label>Biographie (optionnel)</label><textarea class="input textarea" id="new-bio" rows="3" placeholder="Présentation initiale..."></textarea></div>
-      <div style="background:rgba(160,120,64,0.06);border:1px solid rgba(160,120,64,0.15);padding:0.85rem 1rem;font-size:0.72rem;color:#a07840;letter-spacing:0.05em;border-radius:1px">
-        ℹ️ Le modèle devra choisir son mot de passe lors de sa première connexion.
+      <div class="nm-field">
+        <label class="nm-label">Adresse e-mail *</label>
+        <div class="nm-input-icon">
+          <input class="nm-input" id="new-email" type="email" placeholder="prenom@email.com" oninput="nmValidate()" />
+          <div class="nm-valid-dot" id="nm-email-dot"></div>
+        </div>
+      </div>
+      <div class="nm-field">
+        <label class="nm-label">Biographie <span style="color:#4a3a28;text-transform:none;letter-spacing:0">(optionnel)</span></label>
+        <textarea class="nm-input nm-textarea" id="new-bio" placeholder="Courte présentation du modèle…"></textarea>
+      </div>
+      <div class="nm-hint">
+        <span class="nm-hint-icon">🔑</span>
+        <span>Le modèle choisira son propre mot de passe lors de sa première connexion. Aucune donnée sensible n'est stockée ici.</span>
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="nm-footer">
       <button class="btn btn-ghost" onclick="closeNewModelModal()">Annuler</button>
-      <button class="btn btn-primary" onclick="createModel()">Créer la case</button>
+      <button class="btn btn-primary" id="nm-create-btn" onclick="createModel()" disabled style="opacity:0.45;cursor:not-allowed">Créer la case</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PROMOTE MODAL ═══ -->
+<div class="promote-modal-overlay hidden" id="promote-modal">
+  <div class="promote-modal">
+    <div class="promote-modal-header">
+      <div class="promote-modal-eyebrow">Promotion</div>
+      <div class="promote-modal-title">Promouvoir en modèle</div>
+    </div>
+    <div class="promote-modal-body">
+      <div class="promote-user-card">
+        <div class="promote-user-avatar" id="promote-avatar">?</div>
+        <div class="promote-user-info">
+          <div class="promote-user-name" id="promote-name">—</div>
+          <div class="promote-user-email" id="promote-email">—</div>
+        </div>
+        <div class="promote-arrow">→</div>
+        <div class="promote-role-badge">✦ Modèle</div>
+      </div>
+      <p class="promote-info-text">
+        Ce visiteur obtiendra un profil public visible dans la vitrine. Il pourra recevoir des messages, des likes, et gérer ses médias depuis son espace personnel.<br><br>
+        <span style="color:#a07840">Cette action est réversible depuis le panneau admin.</span>
+      </p>
+    </div>
+    <div class="promote-modal-footer">
+      <button class="btn btn-ghost" onclick="closePromoteModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmPromote()">✦ Confirmer la promotion</button>
     </div>
   </div>
 </div>
@@ -2968,25 +3065,56 @@ function bindEditEvents() {
 // ── ADMIN ──
 async function createModel() {
   const name = document.getElementById("new-name").value.trim();
-  const email = document.getElementById("new-email").value.trim();
+  const email = document.getElementById("new-email").value.trim().toLowerCase();
   const role = document.getElementById("new-role").value;
   const bio = document.getElementById("new-bio").value.trim();
   const errEl = document.getElementById("new-model-err");
   errEl.classList.add("hidden");
 
   if (!name || !email) { errEl.textContent = "Nom et email sont requis."; errEl.classList.remove("hidden"); return; }
-  if (models.find(m => m.email.toLowerCase() === email.toLowerCase())) { errEl.textContent = "Cet email est déjà utilisé."; errEl.classList.remove("hidden"); return; }
+  if (!validateEmail(email)) { errEl.textContent = "Format d\'email invalide."; errEl.classList.remove("hidden"); return; }
+  if (models.find(m => m.email.toLowerCase() === email)) { errEl.textContent = "Cet email est déjà utilisé par un autre compte."; errEl.classList.remove("hidden"); return; }
 
-  const newModel = { id: Date.now(), name, email: email.toLowerCase(), password: null, mustChangePassword: true, role, bio, photos: [], videos: [], initial: name.charAt(0).toUpperCase(), avatar: null };
+  const btn = document.getElementById("nm-create-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Création…"; btn.style.opacity = "0.6"; }
+
+  const newModel = { id: Date.now(), name, email, password: null, mustChangePassword: true, role, bio, photos: [], videos: [], initial: name.charAt(0).toUpperCase(), avatar: null };
   models.push(newModel);
 
   try {
     await saveModelToFirebase(newModel);
-  } catch(e) {  }
+  } catch(e) { }
 
   closeNewModelModal();
   goPage("admin");
 }
+
+function nmValidate() {
+  const name = (document.getElementById("new-name")?.value || "").trim();
+  const email = (document.getElementById("new-email")?.value || "").trim();
+  const nameDot = document.getElementById("nm-name-dot");
+  const emailDot = document.getElementById("nm-email-dot");
+  const nameInput = document.getElementById("new-name");
+  const emailInput = document.getElementById("new-email");
+  const btn = document.getElementById("nm-create-btn");
+
+  const nameOk = name.length >= 2;
+  const emailOk = validateEmail(email);
+
+  if (nameDot) nameDot.classList.toggle("show", nameOk);
+  if (nameInput) { nameInput.classList.toggle("valid", nameOk); nameInput.classList.toggle("invalid", !nameOk && name.length > 0); }
+  if (emailDot) emailDot.classList.toggle("show", emailOk);
+  if (emailInput) { emailInput.classList.toggle("valid", emailOk); emailInput.classList.toggle("invalid", !emailOk && email.length > 0); }
+
+  if (btn) {
+    const ok = nameOk && emailOk;
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? "1" : "0.45";
+    btn.style.cursor = ok ? "pointer" : "not-allowed";
+  }
+}
+
+// (replaced)
 
 async function deleteModel(id) {
   if (!confirm("Supprimer ce modèle ?")) return;
@@ -3002,12 +3130,19 @@ function closeNewModelModal(e) {
   if (e && e.target !== document.getElementById("new-model-modal")) return;
   document.getElementById("new-model-modal").classList.add("hidden");
   document.getElementById("new-model-err").classList.add("hidden");
-  ["new-name","new-email","new-bio"].forEach(id => document.getElementById(id).value = "");
+  ["new-name","new-email","new-bio"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ""; el.classList.remove("valid","invalid"); }
+  });
   document.getElementById("new-role").value = "model";
+  const btn = document.getElementById("nm-create-btn");
+  if (btn) { btn.disabled = true; btn.style.opacity = "0.45"; btn.textContent = "Créer la case"; }
+  ["nm-name-dot","nm-email-dot"].forEach(id => document.getElementById(id)?.classList.remove("show"));
 }
 
 function openNewModelModal() {
   document.getElementById("new-model-modal").classList.remove("hidden");
+  setTimeout(() => document.getElementById("new-name")?.focus(), 100);
 }
 
 // ── RENDERS ──
@@ -4012,11 +4147,30 @@ function getBanStatus(m) {
   return null;
 }
 
-async function promoteToModel(id) {
+let _pendingPromoteId = null;
+
+function promoteToModel(id) {
   const m = models.find(x => x.id === id);
+  if (!m) return;
+  _pendingPromoteId = id;
+  document.getElementById("promote-avatar").textContent = m.initial || m.name.charAt(0).toUpperCase();
+  document.getElementById("promote-name").textContent = m.name;
+  document.getElementById("promote-email").textContent = m.email;
+  document.getElementById("promote-modal").classList.remove("hidden");
+}
+
+function closePromoteModal() {
+  document.getElementById("promote-modal").classList.add("hidden");
+  _pendingPromoteId = null;
+}
+
+async function confirmPromote() {
+  if (!_pendingPromoteId) return;
+  const m = models.find(x => x.id === _pendingPromoteId);
   if (!m) return;
   m.role = "model";
   try { await saveModelToFirebase(m); } catch(e) {}
+  closePromoteModal();
   goPage("admin");
 }
 
@@ -4084,7 +4238,7 @@ function renderAdmin() {
           ${banStatus ? `<span class="badge badge-${banStatus.type}" style="margin-left:4px">${banStatus.label}</span>` : ''}
         </td>
         <td><div class="td-actions">
-          ${!banStatus ? `<button class="btn btn-primary btn-sm" onclick="promoteToModel(${m.id})">→ Créer sa case</button>` : ''}
+          ${!banStatus ? `<button class="btn btn-primary btn-sm" style="background:linear-gradient(135deg,#7a5020,#5a3040);letter-spacing:0.12em" onclick="promoteToModel(${m.id})">✦ Promouvoir</button>` : ''}
           ${banStatus
             ? `<button class="btn btn-ghost btn-sm" style="border-color:rgba(100,180,100,0.4);color:#70c090" onclick="unbanUser(${m.id})">✓ Débannir</button>`
             : `<button class="btn btn-red btn-sm" onclick="openBanModal(${m.id})">🚫 Bannir</button>`}
