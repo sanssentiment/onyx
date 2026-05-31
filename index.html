@@ -2708,9 +2708,8 @@ async function openProfile(id) {
   const m = findById(id);
   if (m && !(session?.email === m.email)) {
     m.views = (m.views || 0) + 1;
-    if (window._fb) {
-      const { db, doc, updateDoc } = window._fb;
-      updateDoc(doc(db, "models", String(id)), { views: m.views }).catch(() => {});
+    if (window._fb?.db) {
+      window._fb.db.collection("models").doc(String(id)).update({ views: m.views }).catch(() => {});
     }
   }
   goPage("profile");
@@ -5012,8 +5011,7 @@ async function openChatThread(convId, modelId, peerName) {
 async function markConversationReadVisitor(convId) {
   if (!window._fb?.db) return;
   try {
-    const { db, doc, updateDoc } = window._fb;
-    await updateDoc(doc(db, "chat_threads", convId), { unreadForVisitor: false });
+    await window._fb.db.collection("chat_threads").doc(convId).update({ unreadForVisitor: false });
     checkVisitorUnread();
   } catch (e) {}
 }
@@ -5032,11 +5030,10 @@ function chatInputKeydown(e) {
 function setTypingStatus(isTyping) {
   if (!chatConvId || !session || !window._fb?.db) return;
   
-  const { db, doc, updateDoc } = window._fb;
   const typingField = session.role === "visitor" ? "visitorTyping" : "modelTyping";
   
   try {
-    updateDoc(doc(db, "chat_threads", chatConvId), { [typingField]: isTyping });
+    window._fb.db.collection("chat_threads").doc(chatConvId).update({ [typingField]: isTyping });
   } catch (e) {
     console.error("Error setting typing status:", e);
   }
@@ -5199,8 +5196,7 @@ async function sendChatMessage() {
 async function markConversationRead(convId) {
   if (!window._fb?.db) return;
   try {
-    const { db, doc, updateDoc } = window._fb;
-    await updateDoc(doc(db, "chat_threads", convId), { unreadForModel: false });
+    await window._fb.db.collection("chat_threads").doc(convId).update({ unreadForModel: false });
     checkUnread();
   } catch (e) {}
 }
@@ -5559,8 +5555,7 @@ async function toggleLike(modelId, event) {
     }
     await saveFavoriteToFirebase(modelId, isNowLiked);
     if (window._fb) {
-      const { db, doc, updateDoc } = window._fb;
-      await updateDoc(doc(db, "models", String(id)), { likes: m.likes });
+      await window._fb.db.collection("models").doc(String(id)).update({ likes: m.likes });
     }
     // Push like notification to model
     if (isNowLiked && m.email && m.settings?.notifLikes !== false) {
@@ -5924,9 +5919,8 @@ async function saveSettings() {
   }
 
   if (window._fb) {
-    const { db, doc, updateDoc } = window._fb;
     try {
-      await updateDoc(doc(db, "models", String(m.id)), { settings: m.settings });
+      await window._fb.db.collection("models").doc(String(m.id)).update({ settings: m.settings });
       const msgEl = document.getElementById("settings-save-msg");
       if (msgEl) { msgEl.textContent = "✓ Paramètres sauvegardés"; setTimeout(()=>{ if(msgEl) msgEl.textContent=""; }, 2000); }
     } catch(e) {}
