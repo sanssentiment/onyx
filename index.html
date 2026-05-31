@@ -36,8 +36,8 @@
   emailjs.init("mxYV5_cTCB4mnWEut");
 </script>
 
-<!-- Google AdSense -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1765390544620993" crossorigin="anonymous"></script>
+<!-- ExoClick -->
+<script async src="https://a.exoclick.com/injector.js" data-seed="VOTRE_ZONE_ID_EXOCLICK"></script>
 
 <!-- Firebase SDK (Compat version - no ES6 modules) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -469,8 +469,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .combined-ban-form{display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.25rem;align-items:flex-end}
 
 /* ── ADSENSE AD SLOT ── */
-.adsense-container{width:100%;max-width:728px;margin:2rem auto;padding:1rem;background:rgba(160,120,64,0.02);border:1px solid rgba(160,120,64,0.08);border-radius:4px;text-align:center}
-.adsense-placeholder{min-height:90px;display:flex;align-items:center;justify-content:center;color:#7a6a58;font-size:0.75rem;letter-spacing:0.1em}
+.exoclick-container{width:100%;max-width:728px;margin:2rem auto;text-align:center}
 
 /* ═══════════════════════════════════════════
    RESPONSIVE MOBILE — @media queries
@@ -3296,14 +3295,17 @@ function renderHome() {
       <div class="hero-scroll">scroll<br />↓</div>
     </div>
     
-    <div class="adsense-container">
-      <!-- Google AdSense - Remplacez ca-XXXXXXXXXX par votre ID AdSense -->
-      <ins class="adsbygoogle"
-           style="display:block"
-           data-ad-client="ca-pub-1765390544620993"
-           data-ad-slot="XXXXXXXXXX"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
+    <div class="exoclick-container">
+      <!-- ExoClick — Remplacez ZONE_ID par votre ID de zone ExoClick -->
+      <div id="exoclick-banner-728"></div>
+      <script>
+        (function(){
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://syndication.exoclick.com/splash.php?type=9&idzone=ZONE_ID';
+          document.getElementById('exoclick-banner-728').appendChild(s);
+        })();
+      </script>
     </div>
     
     <div id="vitrine" class="section">
@@ -6572,7 +6574,7 @@ function renderPrivacy() {
       <ul>
         <li><strong>Google Firebase / Firestore</strong> — stockage des données applicatives et authentification (Google LLC, États-Unis — clauses contractuelles types RGPD) ;</li>
         <li><strong>EmailJS</strong> — envoi d'e-mails de vérification et de support ;</li>
-        <li><strong>Google AdSense / régie publicitaire</strong> — affichage d'annonces (peut utiliser des cookies publicitaires — voir notre Politique cookies) ;</li>
+        <li><strong>ExoClick</strong> — régie publicitaire pour l'affichage d'annonces (peut utiliser des cookies publicitaires — voir notre Politique cookies) ;</li>
         <li><strong>GitHub Pages</strong> — hébergement statique du site.</li>
       </ul>
       <p>Aucune donnée personnelle n'est vendue à des tiers.</p>
@@ -6634,8 +6636,8 @@ function renderTerms() {
       <ul><li>Publier du contenu illegal, non consenti, haineux, violent ou trompeur.</li><li>Harceler, menacer, usurper une identite ou contourner une sanction.</li><li>Envoyer du spam, automatiser des actions abusives ou perturber la plateforme.</li></ul>
       <h3>Contenus et moderation</h3>
       <p>Onyx Studio peut masquer, modifier ou supprimer un contenu, suspendre un compte, ou bloquer un utilisateur en cas de non-respect des regles.</p>
-      <h3>Publicites</h3>
-      <p>Des emplacements publicitaires peuvent etre affiches. Les annonces doivent respecter les regles de la plateforme et ne pas degrader l'experience utilisateur.</p>
+      <h3>Publicités</h3>
+      <p>Des emplacements publicitaires ExoClick peuvent être affichés sur le site. Ces annonces sont gérées par un réseau tiers et peuvent utiliser des cookies à des fins de ciblage. Elles doivent respecter les règles de la plateforme et ne pas dégrader l'expérience utilisateur.</p>
     </div>
     ${legalFooter()}
   </div>`;
