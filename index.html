@@ -3221,6 +3221,16 @@ async function renderHomeAsync() {
     console.error("Erreur dans renderHomeAsync:", e);
   }
   document.getElementById("root").innerHTML = renderHome();
+  loadExoClick();
+}
+
+function loadExoClick() {
+  var el = document.getElementById('exoclick-banner-728');
+  if (!el || el.hasChildNodes()) return;
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://syndication.exoclick.com/splash.php?type=9&idzone=ZONE_ID';
+  el.appendChild(s);
 }
 
 function renderHome() {
@@ -3296,16 +3306,7 @@ function renderHome() {
     </div>
     
     <div class="exoclick-container">
-      <!-- ExoClick — Remplacez ZONE_ID par votre ID de zone ExoClick -->
       <div id="exoclick-banner-728"></div>
-      <script>
-        (function(){
-          var s = document.createElement('script');
-          s.async = true;
-          s.src = 'https://syndication.exoclick.com/splash.php?type=9&idzone=ZONE_ID';
-          document.getElementById('exoclick-banner-728').appendChild(s);
-        })();
-      </script>
     </div>
     
     <div id="vitrine" class="section">
