@@ -4150,26 +4150,32 @@ function getBanStatus(m) {
 let _pendingPromoteId = null;
 
 function promoteToModel(id) {
-  const m = models.find(x => x.id === id);
-  if (!m) return;
-  _pendingPromoteId = id;
+  // Firebase IDs can be strings or numbers — use == for loose comparison
+  const m = models.find(x => x.id == id || String(x.id) === String(id));
+  if (!m) { console.warn("promoteToModel: model not found for id", id, models.map(x=>x.id)); return; }
+  _pendingPromoteId = m.id;
+  const overlay = document.getElementById("promote-modal");
+  if (!overlay) { console.error("promote-modal element not found"); return; }
   document.getElementById("promote-avatar").textContent = m.initial || m.name.charAt(0).toUpperCase();
   document.getElementById("promote-name").textContent = m.name;
   document.getElementById("promote-email").textContent = m.email;
-  document.getElementById("promote-modal").classList.remove("hidden");
+  overlay.classList.remove("hidden");
 }
 
 function closePromoteModal() {
-  document.getElementById("promote-modal").classList.add("hidden");
+  const overlay = document.getElementById("promote-modal");
+  if (overlay) overlay.classList.add("hidden");
   _pendingPromoteId = null;
 }
 
 async function confirmPromote() {
   if (!_pendingPromoteId) return;
-  const m = models.find(x => x.id === _pendingPromoteId);
+  const m = models.find(x => x.id == _pendingPromoteId || String(x.id) === String(_pendingPromoteId));
   if (!m) return;
+  const btn = document.querySelector("#promote-modal .btn-primary");
+  if (btn) { btn.disabled = true; btn.textContent = "Promotion…"; }
   m.role = "model";
-  try { await saveModelToFirebase(m); } catch(e) {}
+  try { await saveModelToFirebase(m); } catch(e) { console.error(e); }
   closePromoteModal();
   goPage("admin");
 }
@@ -4257,7 +4263,6 @@ function renderAdmin() {
         <div style="display:flex;gap:0.7rem;flex-wrap:wrap">
           <button class="btn btn-ghost" onclick="openMessages()">✉ Tous les messages</button>
           <button class="btn btn-ghost" onclick="cleanupDatabase()">🧹 Nettoyer la base</button>
-          <button class="btn btn-primary" onclick="openNewModelModal()">+ Nouvelle case</button>
         </div>
       </div>
       <div class="admin-stats-5">
@@ -4285,10 +4290,27 @@ function renderAdmin() {
       </div>
 
       <div style="margin-bottom:0.75rem;font-size:0.62rem;letter-spacing:0.25em;text-transform:uppercase;color:#9090c0">Visiteurs inscrits</div>
+
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem">
+        <div style="position:relative;flex:1;max-width:420px">
+          <input
+            id="visitor-search-input"
+            type="email"
+            placeholder="Rechercher par email…"
+            oninput="filterVisitorTable(this.value)"
+            style="width:100%;background:rgba(80,80,120,0.07);border:1px solid rgba(80,80,160,0.22);color:#e0d8c8;padding:0.7rem 1rem 0.7rem 2.6rem;font-family:'Jost',sans-serif;font-size:0.83rem;outline:none;transition:border-color 0.25s,box-shadow 0.25s;border-radius:2px"
+            onfocus="this.style.borderColor='rgba(100,100,200,0.45)';this.style.boxShadow='0 0 0 3px rgba(80,80,160,0.1)'"
+            onblur="this.style.borderColor='rgba(80,80,160,0.22)';this.style.boxShadow='none'"
+          />
+          <span style="position:absolute;left:0.85rem;top:50%;transform:translateY(-50%);color:rgba(144,144,192,0.5);font-size:0.85rem;pointer-events:none">⌕</span>
+        </div>
+        <div id="visitor-search-result" style="font-size:0.72rem;color:#6a5a78;letter-spacing:0.05em"></div>
+      </div>
+
       <div style="background:rgba(60,60,80,0.04);border:1px solid rgba(80,80,120,0.12);margin-bottom:2.5rem">
-        <table class="admin-table">
+        <table class="admin-table" id="visitor-table">
           <thead><tr><th>Visiteur</th><th>Email</th><th>Statut</th><th>Actions</th></tr></thead>
-          <tbody>${visitorRows}</tbody>
+          <tbody id="visitor-tbody">${visitorRows}</tbody>
         </table>
       </div>
 
@@ -5723,6 +5745,43 @@ function handleSearch(value) {
 function setAdminSort(mode) {
   window._adminSort = mode;
   render();
+}
+
+function filterVisitorTable(query) {
+  const q = query.trim().toLowerCase();
+  const tbody = document.getElementById("visitor-tbody");
+  const resultEl = document.getElementById("visitor-search-result");
+  if (!tbody) return;
+
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+  let found = 0;
+
+  rows.forEach(row => {
+    // skip empty-state row
+    if (row.querySelector("td[colspan]")) { row.style.display = q ? "none" : ""; return; }
+    const email = (row.cells[1]?.textContent || "").toLowerCase();
+    const name  = (row.cells[0]?.textContent || "").toLowerCase();
+    const match = !q || email.includes(q) || name.includes(q);
+    row.style.display = match ? "" : "none";
+    if (match) found++;
+  });
+
+  if (!q) {
+    if (resultEl) resultEl.textContent = "";
+    // show empty state row if needed
+    rows.forEach(r => { if (r.querySelector("td[colspan]")) r.style.display = ""; });
+    return;
+  }
+
+  if (resultEl) {
+    if (found === 0) {
+      resultEl.textContent = "Aucun visiteur trouvé.";
+      resultEl.style.color = "#d07080";
+    } else {
+      resultEl.textContent = found + " visiteur" + (found > 1 ? "s" : "") + " trouvé" + (found > 1 ? "s" : "");
+      resultEl.style.color = "#70a090";
+    }
+  }
 }
 
 // ── SETTINGS ──
