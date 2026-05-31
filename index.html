@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%97%88%3C/text%3E%3C/svg%3E" />
 <title>Onyx Studio</title>
 <!--
   ONYX STUDIO — FICHIER COMPLET (toutes fonctionnalités)
@@ -3227,9 +3228,11 @@ async function renderHomeAsync() {
 function loadExoClick() {
   var el = document.getElementById('exoclick-banner-728');
   if (!el || el.hasChildNodes()) return;
+  var zoneId = 'ZONE_ID'; // Remplacez par votre vrai ID de zone ExoClick
+  if (zoneId === 'ZONE_ID') return; // Ne charge pas si non configuré
   var s = document.createElement('script');
   s.async = true;
-  s.src = 'https://syndication.exoclick.com/splash.php?type=9&idzone=ZONE_ID';
+  s.src = 'https://syndication.exoclick.com/splash.php?type=9&idzone=' + zoneId;
   el.appendChild(s);
 }
 
@@ -6039,6 +6042,7 @@ async function renderAdminActivityLog() {
 let _adminTicketsUnsubscribe = null;
 let _userTicketsUnsubscribe = null;
 let _modelsLikesUnsubscribe = null;
+let _commentsUnsubscribe = null;
 
 async function submitContactTicket() {
   const name = (document.getElementById("contact-name")?.value || "").trim();
