@@ -2747,7 +2747,7 @@ async function submitComment() {
     return;
   }
 
-  const m = models.find(x => x.id === currentProfileId);
+  const m = findById(currentProfileId);
   if (!m) return;
 
   // Enforce 1 comment per person per profile
@@ -2813,7 +2813,7 @@ async function openMyProfile() {
   showLoader("Chargement…");
   try { await loadModelsFromFirebase(); } catch(e) {}
   // Chercher par ID en priorité (plus fiable), puis par email
-  let m = session.id ? models.find(x => x.id === session.id) : null;
+  let m = session.id ? findById(session.id) : null;
   if (!m) {
     const sessionEmail = (session.email || "").trim().toLowerCase();
     m = models.find(x => (x.email || "").trim().toLowerCase() === sessionEmail);
@@ -2828,7 +2828,7 @@ async function openMyProfile() {
 
 function openMyEdit() {
   if (session?.role !== "model") return;
-  let m = session.id ? models.find(x => x.id === session.id) : null;
+  let m = session.id ? findById(session.id) : null;
   if (!m) {
     const sessionEmail = (session.email || "").trim().toLowerCase();
     m = models.find(x => (x.email || "").trim().toLowerCase() === sessionEmail);
@@ -2954,7 +2954,7 @@ async function saveEdit() {
     editDraft = null;
     await loadModelsFromFirebase();
     // Vérifier que les données sont bien chargées
-    const savedModel = models.find(x => x.id === savedId);
+    const savedModel = findById(savedId);
         currentProfileId = savedId;
     if (uploadErrors > 0) {
       alert(`⚠ ${uploadErrors} fichier(s) n'ont pas pu être uploadés.\n\nVérifie dans la console (F12) le message d'erreur Cloudinary précis.\n\nSolution probable : le preset "Onyxise" doit être en mode "Unsigned" sur cloudinary.com → Settings → Upload presets.`);
@@ -3327,7 +3327,7 @@ function renderHome() {
 }
 
 function renderProfile() {
-    const m = models.find(x => x.id === currentProfileId);
+    const m = findById(currentProfileId);
   if (!m) return "<div style='padding:10rem;text-align:center;color:#d07080'>Modèle introuvable. (id=" + currentProfileId + ", models=" + models.length + ")</div>";
   const isMine = session?.role === "model" && m.email === session.email;
   const cover = m.photos[0]?.url;
@@ -4972,7 +4972,7 @@ function promptLoginForChat(modelId) {
 async function startConversation(modelId) {
   if (!session) { promptLoginForChat(modelId); return; }
   if (session.role !== "visitor") return;
-  const m = models.find(x => x.id === modelId);
+  const m = findById(modelId);
   if (!m) return;
   chatModelId = modelId;
   chatConvId = getConversationId(modelId, session.email);
@@ -5554,7 +5554,7 @@ async function toggleLike(modelId, event) {
     await saveFavoriteToFirebase(modelId, isNowLiked);
     if (window._fb) {
       const { db, doc, updateDoc } = window._fb;
-      await updateDoc(doc(db, "models", id), { likes: m.likes });
+      await updateDoc(doc(db, "models", String(id)), { likes: m.likes });
     }
     // Push like notification to model
     if (isNowLiked && m.email && m.settings?.notifLikes !== false) {
@@ -6588,7 +6588,7 @@ function toggleNotifPanel() {
 }
 
 async function markNotifRead(id) {
-  const n = _notifList.find(x => x.id === id);
+  const n = _notifList.find(x => String(x.id) === String(id));
   if (!n || n.read) return;
   n.read = true;
   if (window._fb?.db && session) {
