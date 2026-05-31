@@ -2705,7 +2705,7 @@ async function openProfile(id) {
   // Recharger depuis Firebase pour avoir les vraies URLs
   try { await loadModelsFromFirebase(); await loadCommentsFromFirebase(); } catch(e) {}
   // Track view — don't count own profile or admin
-  const m = models.find(x => x.id === id);
+  const m = findById(id);
   if (m && !(session?.email === m.email)) {
     m.views = (m.views || 0) + 1;
     if (window._fb) {
@@ -2838,7 +2838,7 @@ function openMyEdit() {
 
 // ── EDIT ──
 function openEdit(id) {
-  const m = models.find(x => x.id === id);
+  const m = findById(id);
   if (!m) return;
   if (session?.role === "model" && m.email !== session.email) return;
   editDraft = JSON.parse(JSON.stringify(m));
@@ -3118,7 +3118,7 @@ function nmValidate() {
 
 async function deleteModel(id) {
   if (!confirm("Supprimer ce modèle ?")) return;
-  models = models.filter(x => x.id !== id);
+  models = models.filter(x => String(x.id) !== String(id));
   try {
     await deleteModelFromFirebase(id);
     await loadModelsFromFirebase();
@@ -4051,7 +4051,7 @@ let _banDuration = 0; // 0 = permanent
 
 function openBanModal(id) {
   if (session?.role !== "admin") return;
-  const m = models.find(x => x.id === id);
+  const m = findById(id);
   if (!m) return;
   _banTarget = m;
   _banDuration = 0;
@@ -4121,7 +4121,7 @@ async function confirmBan() {
 }
 
 async function unbanUser(id) {
-  const m = models.find(x => x.id === id);
+  const m = findById(id);
   if (!m) return;
   if (!confirm(`Débannir / lever la suspension de ${m.name} ?`)) return;
   m.banned = false;
@@ -4133,6 +4133,9 @@ async function unbanUser(id) {
   } catch(e) { console.error(e); }
   goPage("admin");
 }
+
+// ── ID MATCH HELPER (Firebase IDs can be string or number) ──
+function findById(id) { return models.find(x => String(x.id) === String(id)); }
 
 function getBanStatus(m) {
   if (m.banned) return { label: "Banni", type: "banned" };
@@ -5972,7 +5975,7 @@ function escHtml(str) {
 // ── BADGE VÉRIFIÉ ──
 async function toggleVerified(id) {
   if (session?.role !== "admin") return;
-  const m = models.find(x => x.id === id);
+  const m = findById(id);
   if (!m) return;
   m.verified = !m.verified;
   try {
